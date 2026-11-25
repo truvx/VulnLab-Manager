@@ -11,7 +11,7 @@
     "package:mac": "npm run build && electron-builder --mac dmg zip --publish never",
     "package:mac:arm64": "npm run runtime:bundle:mac:arm64 && npm run build && electron-builder --mac dmg zip --arm64 --publish never",
     "package:win:arm64": "npm run runtime:bundle:win:arm64 && npm run build && electron-builder --win nsis --arm64 --publish never",
-    "runtime:bundle:mac:arm64": "bash scripts/bundle-qemu-macos.sh",
+    "runtime:bundle:mac:arm64": "python3 scripts/bundle-qemu-macos.py",
     "runtime:bundle:win:arm64": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bundle-qemu-windows-arm64.ps1"
   },
   "dependencies": {
