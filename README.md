@@ -108,7 +108,7 @@ Or double-click `Build-Mac-App.command`.
 
 **Windows 11 ARM64**
 
-Requirements: a native Windows ARM64 host and MSYS2 CLANGARM64 with `binutils`, `mingw-w64-clang-aarch64-qemu`, and `mingw-w64-clang-aarch64-qemu-image-util`. The release workflow prepares these packages automatically; a local package build requires the same toolchain. The script stages the required ARM64 executables, DLL dependencies, and firmware before building the EXE.
+Requirements: a native Windows ARM64 host and MSYS2 CLANGARM64 with `mingw-w64-clang-aarch64-llvm-tools`, `mingw-w64-clang-aarch64-qemu`, and `mingw-w64-clang-aarch64-qemu-image-util`. The release workflow prepares these packages automatically; a local package build requires the same toolchain. The script stages the required ARM64 executables, DLL dependencies, and firmware before building the EXE.
 
 ```powershell
 npm ci
