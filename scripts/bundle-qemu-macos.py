@@ -49,11 +49,14 @@ if shutil.which("python3") is None:
 # Install the stable Homebrew bottle. The exact version check prevents a later
 # Homebrew formula update from silently changing a reproducible release build.
 run(["brew", "install", "qemu"], check=False)
-qemu_prefix = Path(run(["brew", "--prefix", "qemu"]))
-brew_prefix = Path(run(["brew", "--prefix"]))
 version_output = run(["qemu-system-x86_64", "--version"])
 if EXPECTED_VERSION not in version_output:
+    # Refresh an older installed formula before refusing the non-pinned runtime.
+    run(["brew", "upgrade", "qemu"], check=False)
+    version_output = run(["qemu-system-x86_64", "--version"])
+if EXPECTED_VERSION not in version_output:
     raise SystemExit(f"Expected QEMU {EXPECTED_VERSION}; found: {version_output.splitlines()[0]}")
+qemu_prefix = Path(run(["brew", "--prefix", "qemu"]))
 
 if OUT.exists():
     shutil.rmtree(OUT)
