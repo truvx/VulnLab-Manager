@@ -127,6 +127,23 @@ async function migrateLegacyLabRoot() {
   log('Checked legacy machine folders for migration into VulnLab.');
 }
 
+function bundledQemuRoot() {
+  const base = app.isPackaged ? process.resourcesPath : app.getAppPath();
+  return path.join(base, app.isPackaged ? 'qemu' : 'runtime', ...(app.isPackaged ? [] : ['qemu']));
+}
+
+function bundledQemuBinDir() {
+  return path.join(bundledQemuRoot(), 'bin');
+}
+
+function bundledQemuDataDir() {
+  return path.join(bundledQemuRoot(), 'share', 'qemu');
+}
+
+async function isFile(candidate: string) {
+  try { return (await fs.stat(candidate)).isFile(); } catch { return false; }
+}
+
 function hostPath() {
   // GUI-launched applications do not always inherit the user's interactive shell PATH.
   const additions = process.platform === 'darwin'
@@ -134,7 +151,7 @@ function hostPath() {
     : process.platform === 'win32'
       ? [path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'qemu'), 'C:\\msys64\\clangarm64\\bin', 'C:\\msys64\\ucrt64\\bin']
       : ['/usr/local/bin', '/usr/local/sbin', '/usr/bin', '/usr/sbin', '/bin', '/sbin', '/snap/bin'];
-  return [...new Set([...additions, ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean)])].join(path.delimiter);
+  return [...new Set([bundledQemuBinDir(), ...additions, ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean)])].join(path.delimiter);
 }
 
 async function resolveCommand(command: string): Promise<string | null> {
@@ -162,6 +179,7 @@ async function resolveCommand(command: string): Promise<string | null> {
     'qemu-img': [path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'qemu', 'qemu-img.exe')]
   } : {};
   const candidates = [
+    ...names.map((name) => path.join(bundledQemuBinDir(), name)),
     ...(known[command] ?? []),
     ...hostPath().split(path.delimiter).flatMap((dir) => names.map((name) => path.join(dir, name)))
   ];
@@ -191,10 +209,21 @@ async function runTool(command: string, args: string[], options: ExecFileOptions
 }
 
 async function getSystemInfo() {
-  const [qemuX86, qemuImg, qemuI386] = await Promise.all([
-    commandExists('qemu-system-x86_64'), commandExists('qemu-img'), commandExists('qemu-system-i386')
+  const [qemuX86, qemuImg, qemuI386, qemuExecutable] = await Promise.all([
+    commandExists('qemu-system-x86_64'), commandExists('qemu-img'), commandExists('qemu-system-i386'), resolveCommand('qemu-system-x86_64')
   ]);
-  return { platform: process.platform, hostArch: process.arch, qemuX86, qemuImg, qemuI386 };
+  let qemuVersion: string | null = null;
+  if (qemuExecutable) {
+    try {
+      const { stdout } = await execFileAsync(qemuExecutable, ['--version'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: hostPath() } });
+      qemuVersion = stdout.split(/\\r?\\n/)[0]?.trim() ?? null;
+    } catch (error) {
+      log(`QEMU version check warning: ${String(error)}`);
+    }
+  }
+  const bundledRoot = path.resolve(bundledQemuRoot()) + path.sep;
+  const qemuBundled = !!qemuExecutable && path.resolve(qemuExecutable).startsWith(bundledRoot);
+  return { platform: process.platform, hostArch: process.arch, qemuX86, qemuImg, qemuI386, qemuBundled, qemuVersion };
 }
 
 function safeArchivePath(entryName: string): string | null {
@@ -555,6 +584,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   log(`Created disposable write overlay: ${overlayPath}`);
   const qemuDiskPath = process.platform === 'win32' ? overlayPath.replace(/\\/g, '/') : overlayPath;
   const qemuArgs = [
+    ...(await isFile(path.join(bundledQemuDataDir(), 'bios.bin')) ? ['-L', bundledQemuDataDir()] : []),
     '-machine', 'pc', '-accel', 'tcg', '-cpu', 'max', '-smp', '1', '-m', String(memoryMiB),
     '-name', machine.name,
     '-drive', `file=${qemuDiskPath},format=qcow2,if=ide,index=0`,
@@ -568,7 +598,9 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   log(`QEMU disk: ${machine.diskPath}`);
   const qemuExecutable = await resolveCommand(qemuBinary(architecture));
   if (!qemuExecutable) throw new Error(`${qemuBinary(architecture)} was not found. Install QEMU and restart the app.`);
-  const child = spawn(qemuExecutable, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH: hostPath() } });
+  const qemuModuleDir = path.join(bundledQemuRoot(), 'lib', 'qemu');
+  const runtimeEnv = { ...process.env, PATH: hostPath(), ...(await isFile(path.join(qemuModuleDir, '.runtime-marker')) ? { QEMU_MODULE_DIR: qemuModuleDir } : {}) };
+  const child = spawn(qemuExecutable, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: runtimeEnv });
   targetProcess = child;
   activeMachineId = id;
   child.stdout?.on('data', (chunk: Buffer) => log(`QEMU: ${chunk.toString().trim()}`));
