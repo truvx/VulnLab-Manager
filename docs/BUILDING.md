@@ -43,7 +43,7 @@ npm ci
 npm run package:win:arm64
 ```
 
-The PowerShell staging script copies the QEMU system emulators, `qemu-img`, firmware/data, modules and the transitive runtime DLL dependencies into `runtime/qemu`. It checks the architecture and QEMU version and smoke-tests all three bundled tools before packaging. The output is an NSIS `.exe` installer under `release/`.
+The PowerShell staging script copies the QEMU system emulators, `qemu-img` and firmware/data, then resolves their transitive runtime DLL dependencies into `runtime/qemu` using the native CLANGARM64 `llvm-objdump`. Optional QEMU instrumentation/test plugins are excluded. It checks the architecture and QEMU version and smoke-tests all three bundled tools before packaging. The output is an NSIS `.exe` installer under `release/`.
 
 You can also run `Build-Windows-ARM64.ps1` from PowerShell.
 
