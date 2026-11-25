@@ -12,7 +12,7 @@ The normal development build (`npm run build`) does not require QEMU. The applic
 
 Both platform release runtimes are pinned to QEMU **11.1.3**:
 
-- macOS Apple Silicon: Homebrew `qemu` formula and its installed shared-library dependencies.
+- macOS Apple Silicon: Homebrew `qemu` formula; the bundler follows the actual dylib links of the QEMU tools and modules with `otool`.
 - Windows ARM64: MSYS2 CLANGARM64 packages `mingw-w64-clang-aarch64-qemu 11.1.3-2` and `mingw-w64-clang-aarch64-qemu-image-util 11.1.3-2`.
 
 The Windows runtime uses native ARM64 binaries, not x64 binaries running under Windows emulation. MSYS2 documents CLANGARM64 as its AArch64 environment; QEMU documents that Windows ARM64 builds should use CLANGARM64. See [MSYS2 ARM64 support](https://www.msys2.org/docs/arm64/) and [QEMU build environment](https://www.qemu.org/docs/master/devel/build-environment.html).
@@ -26,7 +26,7 @@ npm ci
 npm run package:mac:arm64
 ```
 
-The runtime staging script installs Homebrew QEMU, verifies version 11.1.3, copies the QEMU executables, firmware/data, loadable modules, shared dylibs, and available license files into `runtime/qemu`, then smoke-tests all three tools. The output contains a DMG installer and ZIP archive under `release/`.
+The runtime staging script installs Homebrew QEMU, verifies version 11.1.3, copies the QEMU executables, firmware/data and loadable modules, resolves and rewrites their transitive dylib links with `otool` and `install_name_tool`, and includes available license files in `runtime/qemu`, then smoke-tests all three tools. The output contains a DMG installer and ZIP archive under `release/`.
 
 You can also run `Build-Mac-App.command`.
 
