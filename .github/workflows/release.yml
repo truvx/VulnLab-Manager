@@ -80,6 +80,7 @@ jobs:
           install: >-
             binutils
             mingw-w64-clang-aarch64-qemu
+            mingw-w64-clang-aarch64-qemu-common
             mingw-w64-clang-aarch64-qemu-image-util
       - name: Build Windows ARM64 installer with bundled QEMU
         env:
