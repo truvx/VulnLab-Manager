@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, existsSync } from 'node:fs';
 import crypto from 'node:crypto';
 import yauzl from 'yauzl';
 import { pipeline } from 'node:stream/promises';
@@ -155,7 +155,7 @@ function qemuRuntimeEnvironment() {
   if (process.platform === 'win32') {
     env.PATH = [bundledQemuBinDir(), process.env.PATH].filter(Boolean).join(path.delimiter);
   }
-  if (fsSync.existsSync(path.join(moduleDir, '.runtime-marker'))) {
+  if (existsSync(path.join(moduleDir, '.runtime-marker'))) {
     env.QEMU_MODULE_DIR = moduleDir;
   }
   return env;
@@ -232,7 +232,7 @@ async function getSystemInfo() {
   let qemuVersion: string | null = null;
   if (qemuExecutable) {
     try {
-      const { stdout } = await execFileAsync(qemuExecutable, ['--version'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: hostPath() } });
+      const { stdout } = await execFileAsync(qemuExecutable, ['--version'], { encoding: 'utf8', timeout: 5000, env: qemuRuntimeEnvironment() });
       qemuVersion = stdout.split(/\r?\n/)[0]?.trim() ?? null;
     } catch (error) {
       log(`QEMU version check warning: ${String(error)}`);
