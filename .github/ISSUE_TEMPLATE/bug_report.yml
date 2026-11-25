@@ -1,36 +1,48 @@
 name: Bug report
-description: Report a reproducible issue
-title: "[Bug]: "
-labels: ["bug"]
+description: Report a reproducible VulnLab Manager issue.
+labels: [bug]
 body:
-  - type: textarea
-    id: summary
+  - type: markdown
     attributes:
-      label: What happened?
-      description: A clear description of the problem.
-    validations:
-      required: true
+      value: Please do not attach proprietary VM images, credentials, or private machine data.
   - type: input
     id: version
     attributes:
       label: VulnLab Manager version
+      placeholder: 0.4.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Host platform
+      options:
+        - macOS Apple Silicon
+        - Windows 11 ARM64
+        - Other (describe below)
     validations:
       required: true
   - type: input
-    id: platform
+    id: qemu
     attributes:
-      label: OS and architecture
-      placeholder: macOS arm64 / Windows ARM64
-    validations:
-      required: true
+      label: QEMU version
+      placeholder: qemu-system-x86_64 --version
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
+      description: Include the smallest set of steps that reliably reproduces the issue.
     validations:
       required: true
   - type: textarea
-    id: logs
+    id: expected
     attributes:
-      label: Relevant logs
-      description: Remove usernames, tokens, and private paths before posting.
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and relevant logs
+    validations:
+      required: true

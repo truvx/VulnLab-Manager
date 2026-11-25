@@ -1,0 +1,137 @@
+{
+  "name": "vulnlab-manager",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Cross-platform vulnerable machine library and QEMU target manager for macOS and Windows ARM64",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://127.0.0.1:5173 dist-electron/main.js && electron .\"",
+    "build": "tsc -p tsconfig.electron.json && tsc -p tsconfig.json --noEmit && vite build",
+    "start": "electron .",
+    "package:mac": "npm run build && electron-builder --mac dmg zip",
+    "package:mac:arm64": "npm run build && electron-builder --mac dmg zip --arm64",
+    "package:win:arm64": "npm run build && electron-builder --win nsis --arm64"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tar": "^7.5.1",
+    "yauzl": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/yauzl": "^2.10.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.0",
+    "electron": "45.4.1",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "com.tux.vulnhublabmanager",
+    "productName": "VulnLab Manager",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json",
+      "assets/**"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/app.icns",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "directories": {
+      "output": "release"
+    },
+    "asar": true,
+    "artifactName": "VulnLab-Manager-${version}-${arch}.${ext}",
+    "dmg": {
+      "title": "VulnLab Manager",
+      "contents": [
+        {
+          "x": 160,
+          "y": 180,
+          "type": "file"
+        },
+        {
+          "x": 420,
+          "y": 180,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "extraResources": [
+      {
+        "from": "NETWORK_SETUP.md",
+        "to": "network-setup/NETWORK_SETUP.md"
+      },
+      {
+        "from": "lab-network-setup.sh",
+        "to": "network-setup/lab-network-setup.sh"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/app.ico",
+      "executableName": "VulnLabManager",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VulnLab Manager",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "allowScripts": {
+    "electron@45.4.1": true,
+    "esbuild@0.28.2": true
+  },
+  "author": "truvx",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/truvx/VulnLab-Manager.git"
+  },
+  "homepage": "https://github.com/truvx/VulnLab-Manager#readme",
+  "bugs": {
+    "url": "https://github.com/truvx/VulnLab-Manager/issues"
+  },
+  "keywords": [
+    "electron",
+    "qemu",
+    "virtual-machine",
+    "vulnerability-lab",
+    "security-testing",
+    "arm64",
+    "windows-on-arm",
+    "macos",
+    "virtualization"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

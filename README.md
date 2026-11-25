@@ -1,65 +1,144 @@
-# VulnLab Manager
+<div align="center">
+  <img src="assets/app.png" alt="VulnLab Manager icon" width="112" />
+  <h1>VulnLab Manager</h1>
+  <p><strong>A local-first vulnerable machine library and QEMU target manager.</strong></p>
+  <p>
+    <img alt="Version" src="https://img.shields.io/badge/version-0.4.0-6477f5" />
+    <a href="https://github.com/truvx/VulnLab-Manager/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/truvx/VulnLab-Manager/actions/workflows/ci.yml/badge.svg" /></a>
+    <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon-111111?logo=apple" />
+    <img alt="Windows" src="https://img.shields.io/badge/Windows-ARM64-0078D4?logo=windows" />
+    <img alt="Electron" src="https://img.shields.io/badge/Electron-45-47848F?logo=electron" />
+    <img alt="License" src="https://img.shields.io/badge/license-not%20set-lightgrey" />
+  </p>
+</div>
 
-**A cross-platform local lab manager for vulnerable virtual machines.**
+VulnLab Manager organizes local virtual machine images and launches **vulnerable target machines** with QEMU. It is source-independent: import compatible images from VulnHub, Metasploitable, OWASP training projects, custom labs, or other providers when you have a local copy and the right to use it.
 
-VulnLab Manager helps security learners and researchers organize local practice machines, inspect compatible VM images, and launch isolated QEMU targets from a desktop interface. It is designed to work with machines from multiple sources rather than a single training platform.
+The manager deliberately **does not manage attacker VMs**. Start Kali, Parrot, Ubuntu, or another attacker environment yourself in the hypervisor of your choice. VulnLab Manager starts and stops only its selected QEMU target.
 
-> **Current status:** The repository bootstrap currently contains only this README. The v0.4.0 source bundle and its build pipeline have not yet been committed or published here. Installers are not available yet.
+## Downloads
 
-## Goals
+Installers are published on the [Releases](https://github.com/truvx/VulnLab-Manager/releases) page after a release build completes.
 
-- Import locally supplied VM archives, descriptors, and virtual disks.
-- Inspect machine metadata before launching.
-- Launch and stop QEMU targets from the manager.
-- Keep attacker VMs independent: start Kali, Parrot, or another VM manually in the hypervisor of your choice.
-- Provide generic, manually operated Linux lab-network setup guidance.
-- Preserve separation between the isolated practice network and the host's normal network.
-
-## Planned platform packages
-
-| Platform | Target architecture | Installer |
+| Host platform | Installer | Architecture |
 |---|---|---|
-| macOS | Apple Silicon (arm64) | DMG |
-| Windows | ARM64 | EXE (NSIS) |
+| macOS | `.dmg` (plus `.zip` archive) | Apple Silicon / ARM64 |
+| Windows | `.exe` NSIS installer | Windows ARM64 |
 
-Installers will be attached to GitHub Releases after successful native builds. They are not published yet.
+Release assets include a `SHA256SUMS.txt` file. Compare the checksum before installing. These builds are currently unsigned: macOS may show a Gatekeeper warning, and Windows may show a SmartScreen publisher warning. A signed/notarized release requires the maintainer's Apple Developer and Windows code-signing credentials.
 
-## Supported input formats
+> The Windows ARM64 release workflow uses GitHub-hosted ARM64 runners. GitHub currently makes standard Windows ARM64 and macOS ARM64 hosted runners available for public repositories; private repositories need eligible larger or self-hosted runners. See [GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-The importer aims to handle compatible locally supplied formats including ZIP, OVA, TAR/TAR.GZ, OVF/VBOX descriptors, and virtual disks such as VMDK, QCOW2, VDI, VHD/VHDX, IMG and RAW. Actual boot compatibility depends on guest architecture, firmware, disk controller, and QEMU device support.
+## Features
 
-The project does not provide downloads from third-party training platforms. Users must supply images they are authorized to use.
+- **Local machine library** — import, inspect, organize, start, and stop target images locally.
+- **Source-independent importing** — no hard dependency on VulnHub or another training provider.
+- **Archive and disk inspection** — ZIP, OVA, TAR, OVF/VBox folders, and common virtual disk formats.
+- **QEMU target execution** — x86_64 and i386 guest emulation using TCG.
+- **Disposable write overlays** — QEMU writes to a per-run QCOW2 overlay so the imported base image remains unchanged.
+- **Manual attacker workflow** — attacker VMs are intentionally outside the application's lifecycle control.
+- **Isolated UDP networking option** — a QEMU datagram endpoint can be paired with a compatible hypervisor UDP tunnel.
+- **Generic Linux network helper** — included for manual use inside a selected Linux attacker VM; it is never automatically copied or executed.
+- **Cross-platform desktop packaging** — macOS Apple Silicon and Windows ARM64 installers.
 
-## Architecture
+## Compatibility and requirements
 
-- **Desktop shell:** Electron
-- **UI:** React + TypeScript
-- **Virtualization:** QEMU for targets
-- **Optional host integration:** VirtualBox for manually managed attacker VMs
-- **Networking:** local UDP tunnel design with a manually configured attacker-side interface
+| Component | Supported in this release |
+|---|---|
+| Host OS | macOS 13+ (Apple Silicon); Windows 11 ARM64 |
+| Host virtualization | QEMU is required; attacker VM hypervisor is user-managed |
+| QEMU tools | `qemu-system-x86_64`, `qemu-system-i386`, `qemu-img` |
+| Concurrent targets | One QEMU target at a time |
+| Guest profile | x86_64 or i386, BIOS, IDE disk, E1000 network adapter |
 
-The manager is intended to start and stop its selected QEMU target only. It must not automatically start Kali, Parrot, or any other attacker VM.
+The launch profile is intentionally conservative. Images requiring UEFI, VirtIO/SCSI controllers, other NIC models, GPU passthrough, or a different CPU model may need future per-machine hardware profiles. A file format being importable does not guarantee every guest will boot under the current default hardware profile.
 
-## Development
+### QEMU installation
 
-The source code and reproducible build instructions will be added in the next project commit. Native packaging should be performed on the matching host architecture:
+Install a QEMU distribution compatible with your host architecture and add its executable directory to `PATH`.
 
-- macOS Apple Silicon runner for the DMG build.
-- Windows ARM64 runner for the NSIS installer.
+- **macOS Apple Silicon:** `brew install qemu`
+- **Windows ARM64:** install a Windows ARM64 QEMU build and ensure the directory containing `qemu-system-x86_64.exe`, `qemu-system-i386.exe`, and `qemu-img.exe` is in your user or system `PATH`.
 
-Do not treat a cross-platform packaging configuration as proof that a release binary has been tested. Releases will be marked available only after native CI jobs complete successfully.
+The app checks for these tools at startup. QEMU is not bundled in the installer.
+
+## Import formats
+
+- **Archives:** `.zip`, `.ova`, `.tar`, `.tar.gz`, `.tgz`
+- **VM descriptors/folders:** `.ovf`, `.vbox`, and folders containing these descriptors and their referenced disk files
+- **Virtual disks:** `.vmdk`, `.qcow`, `.qcow2`, `.vdi`, `.vhd`, `.vhdx`, `.img`, `.raw`, `.vpc`
+
+For OVF/VirtualBox descriptors, select the descriptor or containing folder. When an archive contains multiple candidate disks, the importer uses metadata where possible and refuses to guess if it cannot identify the boot disk. The app does not download machines directly from hosted platforms or bypass provider access restrictions.
+
+## First run
+
+1. Install QEMU and verify its executables are on `PATH`.
+2. Install VulnLab Manager using the installer for your host architecture.
+3. Open the app and import a local VM package, VM folder, or disk image.
+4. Select a machine, choose guest architecture and memory, then select **Start target**.
+5. Start your preferred attacker VM manually.
+6. Optionally configure an isolated UDP tunnel as described in [Network setup](docs/NETWORKING.md). Keep the attacker VM's normal internet adapter separate from the lab adapter.
+7. Use **Stop target** when finished.
+
+See [Installation](docs/INSTALLATION.md), [Networking](docs/NETWORKING.md), and [Architecture](docs/ARCHITECTURE.md) for details.
+
+## Build from source
+
+Requirements: Node.js 22+ (Node 24 is used in CI), npm, and QEMU for running targets.
+
+```bash
+npm ci
+npm run dev
+```
+
+### Build locally
+
+**macOS Apple Silicon**
+
+```bash
+npm ci
+npm run package:mac:arm64
+```
+
+Or double-click `Build-Mac-App.command`.
+
+**Windows ARM64**
+
+```powershell
+npm ci
+npm run package:win:arm64
+```
+
+Or right-click `Build-Windows-ARM64.ps1` and run it with PowerShell (or execute it from a PowerShell terminal).
+
+Build artifacts are written to `release/`.
+
+## Automated releases
+
+- Pull requests and pushes to `main` run the TypeScript/renderer validation workflow.
+- Push a tag such as `v0.4.0` to build the macOS ARM64 DMG/ZIP and Windows ARM64 EXE, then attach them to a GitHub Release.
+- Alternatively, run **Build installers and publish release** from the Actions tab and supply a release tag.
+
+The release pipeline uses native ARM64 GitHub-hosted runners on macOS and Windows. See `.github/workflows/release.yml`.
+
+## Data locations
+
+- Machine library: `~/VulnLab/machines`
+- Machine index and application state: Electron's per-user application data directory
+- Each start creates a new write overlay beneath that machine's `snapshots/` directory
+
+The app preserves the existing Electron application identifier so an in-place update can retain the current user-data location. It also checks for the earlier `~/VulnHubLab` machine folder during migration.
 
 ## Security notes
 
-- Imported VM images are untrusted. Inspect their origin and keep lab networking isolated.
-- Do not bridge intentionally vulnerable targets to a production or public network.
-- Network setup helpers are manual tools. Review them before running with elevated privileges.
-- No attacker VM is started automatically.
+Virtual machine images are untrusted code. Inspect their origin, keep targets on an isolated network, and avoid bridging intentionally vulnerable guests to trusted home, work, or public networks. The application does not elevate privileges to configure host networking. The included helper is for a Linux guest and requires the user to copy and run it manually.
 
-## Contributing
+Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
-Bug reports and focused pull requests are welcome. Include host OS/architecture, QEMU version, import format, relevant logs, and steps to reproduce. Never attach proprietary or unauthorized machine images.
+## Project status
+
+This is an actively developed desktop utility. The source build and CI pipeline are provided, but compatibility still varies by guest firmware, storage controller, NIC, and host QEMU build. The installers should be treated as unsigned until signing/notarization is configured. See [CHANGELOG.md](CHANGELOG.md) and [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ## License
 
-No license has been selected yet. Until one is added, all rights are reserved by the copyright holder; do not assume that the source can be redistributed or modified under an open-source license.
+No license has been selected for this repository yet. Until a license is added, the source is published for review and personal evaluation; no additional redistribution or modification permissions are granted.
