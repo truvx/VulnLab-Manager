@@ -58,7 +58,7 @@ The **System** checks in the application show the detected QEMU version and whet
 
 ### Windows 11 ARM64
 
-`scripts/bundle-qemu-windows-arm64.ps1` expects a native ARM64 Windows host with MSYS2 CLANGARM64 packages installed. It copies the two system emulators, `qemu-img`, firmware/data and modules, recursively resolves imported runtime DLLs with MSYS2 `objdump`, then smoke-tests all three tools.
+`scripts/bundle-qemu-windows-arm64.ps1` expects a native ARM64 Windows host with MSYS2 CLANGARM64 packages installed. It copies the two system emulators, `qemu-img` and firmware/data, recursively resolves their required runtime DLLs with the native CLANGARM64 `llvm-objdump`, excludes optional QEMU instrumentation/test plugins, then smoke-tests all three tools.
 
 The GitHub release workflow installs the MSYS2 packages automatically on the native Windows ARM64 runner and runs an additional smoke test against the packaged Electron resources.
 
