@@ -9,7 +9,7 @@ on:
       version:
         description: Release version (for example 0.4.0)
         required: true
-        default: 0.4.0
+        default: 0.5.0
         type: string
 
 permissions:
@@ -58,7 +58,20 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Build Windows ARM64 installer
+      - name: Set up native MSYS2 CLANGARM64 QEMU packages
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANGARM64
+          release: false
+          update: true
+          install: >-
+            binutils
+            mingw-w64-clang-aarch64-qemu
+            mingw-w64-clang-aarch64-qemu-image-util
+      - name: Build Windows ARM64 installer with bundled QEMU
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: npm run package:win:arm64
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -78,6 +91,13 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
+      - name: Download corresponding QEMU source archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 https://download.qemu.org/qemu-11.1.3.tar.xz -o release-assets/qemu-11.1.3.tar.xz
+          curl --fail --location --retry 3 https://download.qemu.org/qemu-11.1.3.tar.xz.sig -o release-assets/qemu-11.1.3.tar.xz.sig
+          curl --fail --location --retry 3 https://mirror.msys2.org/mingw/sources/mingw-w64-qemu-11.1.3-2.src.tar.zst -o release-assets/mingw-w64-qemu-11.1.3-2.src.tar.zst
       - name: Generate SHA-256 checksums
         shell: bash
         run: |
