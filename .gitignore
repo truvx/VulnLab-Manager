@@ -15,3 +15,6 @@ Desktop.ini
 *.mobileprovision
 *.provisionprofile
 *.dSYM/
+
+# Generated, platform-specific QEMU runtime bundled by release scripts
+runtime/qemu/
