@@ -1,6 +1,6 @@
 # QEMU and bundled runtime notices
 
-VulnLab Manager v0.5.0 stages QEMU **11.1.3** for macOS Apple Silicon and Windows ARM64. The QEMU host binaries are native to their host platform; x86/i386 guest CPUs are run using QEMU TCG software emulation.
+The planned VulnLab Manager v0.5.0 runtime stages QEMU **11.1.3** for macOS Apple Silicon and Windows ARM64. The QEMU host binaries are native to their host platform; x86/i386 guest CPUs are run using QEMU TCG software emulation. Confirm the native bundle builds and the release artifacts before distributing the runtime.
 
 ## QEMU source and licensing
 
