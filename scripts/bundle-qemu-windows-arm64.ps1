@@ -3,7 +3,6 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $MsysRoot = if ($env:MSYS2_LOCATION) { $env:MSYS2_LOCATION } else { 'C:\msys64' }
 $MingwBin = Join-Path $MsysRoot 'clangarm64\bin'
 $MingwShare = Join-Path $MsysRoot 'clangarm64\share\qemu'
-$MingwLib = Join-Path $MsysRoot 'clangarm64\lib'
 $MingwLicenses = Join-Path $MsysRoot 'clangarm64\share\licenses'
 $Objdump = Join-Path $MsysRoot 'clangarm64\bin\llvm-objdump.exe'
 $Out = Join-Path $ProjectRoot 'runtime\qemu'
