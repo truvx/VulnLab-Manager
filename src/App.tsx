@@ -61,7 +61,7 @@ export default function App() {
   const hostPlatformLabel = system?.platform === 'darwin' ? 'macOS' : system?.platform === 'win32' ? 'Windows' : system?.platform === 'linux' ? 'Linux' : 'Host';
   const hostArchitectureLabel = system?.hostArch === 'arm64' ? 'ARM64' : system?.hostArch === 'x64' ? 'x64' : system?.hostArch ?? 'Detecting…';
   const checks = [
-    { label: 'QEMU x86_64', ready: !!system?.qemuX86 },
+    { label: system?.qemuBundled ? `QEMU ${system.qemuVersion?.replace(/^QEMU emulator version /, '') ?? ''} · Bundled` : 'QEMU x86_64', ready: !!system?.qemuX86 },
     { label: 'QEMU i386', ready: !!system?.qemuI386 },
     { label: 'qemu-img', ready: !!system?.qemuImg }
   ];
