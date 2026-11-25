@@ -4,6 +4,11 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
+# Finder-launched .command files do not always inherit Homebrew's shell PATH.
+if [[ -x "/opt/homebrew/bin/brew" ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "This packaging script must be run on macOS."
   read -r -p "Press Enter to close..."
