@@ -3,10 +3,13 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $MsysRoot = if ($env:MSYS2_LOCATION) { $env:MSYS2_LOCATION } else { 'C:\msys64' }
 $MingwBin = Join-Path $MsysRoot 'clangarm64\bin'
 $MingwShare = Join-Path $MsysRoot 'clangarm64\share\qemu'
+$MingwLib = Join-Path $MsysRoot 'clangarm64\lib'
+$MingwLicenses = Join-Path $MsysRoot 'clangarm64\share\licenses'
 $Objdump = Join-Path $MsysRoot 'usr\bin\objdump.exe'
 $Out = Join-Path $ProjectRoot 'runtime\qemu'
 $OutBin = Join-Path $Out 'bin'
 $OutShare = Join-Path $Out 'share'
+$OutModules = Join-Path $Out 'lib\qemu'
 $ExpectedVersion = '11.1.3'
 
 Write-Host "Preparing bundled QEMU $ExpectedVersion for Windows ARM64..." -ForegroundColor Cyan
@@ -24,13 +27,21 @@ if ($LASTEXITCODE -ne 0 -or $QemuVersionText -notmatch [regex]::Escape($Expected
 }
 
 Remove-Item -Recurse -Force $Out -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $OutBin, $OutShare | Out-Null
+New-Item -ItemType Directory -Force -Path $OutBin, $OutShare, $OutModules | Out-Null
 foreach ($tool in @('qemu-system-x86_64.exe', 'qemu-system-i386.exe', 'qemu-img.exe')) {
   $source = Join-Path $MingwBin $tool
   if (-not (Test-Path $source)) { throw "MSYS2 QEMU package is missing $tool." }
   Copy-Item $source (Join-Path $OutBin $tool) -Force
 }
 Copy-Item $MingwShare (Join-Path $OutShare 'qemu') -Recurse -Force
+$SourceModules = Join-Path $MingwLib 'qemu'
+if (Test-Path $SourceModules) {
+  Copy-Item (Join-Path $SourceModules '*') $OutModules -Recurse -Force
+}
+Set-Content -Path (Join-Path $OutModules '.runtime-marker') -Value 'QEMU 11.1.3' -Encoding ascii
+if (Test-Path $MingwLicenses) {
+  Copy-Item $MingwLicenses (Join-Path $Out 'licenses') -Recurse -Force
+}
 
 # Collect the transitive PE/DLL dependency closure so the packaged executables are
 # self-contained. System DLLs and Windows API-set forwarders remain OS-provided.
@@ -59,6 +70,11 @@ function Resolve-RuntimeDll([string]$Name) {
 foreach ($exe in @('qemu-system-x86_64.exe', 'qemu-system-i386.exe', 'qemu-img.exe')) {
   $Queue.Enqueue((Join-Path $OutBin $exe))
 }
+# Also include dynamically loaded QEMU modules and resolve their private DLL dependencies.
+if (Test-Path $OutModules) {
+  Get-ChildItem -Path $OutModules -Recurse -File -Filter '*.dll' |
+    ForEach-Object { $Queue.Enqueue($_.FullName) }
+}
 while ($Queue.Count -gt 0) {
   $file = $Queue.Dequeue()
   if (-not $Seen.Add($file)) { continue }
@@ -80,6 +96,8 @@ $Manifest = @{
   source = 'MSYS2 CLANGARM64 QEMU package'
   qemuPackage = 'mingw-w64-clang-aarch64-qemu 11.1.3-2'
   sourceUrl = 'https://packages.msys2.org/packages/mingw-w64-clang-aarch64-qemu'
+  imageUtilPackage = 'mingw-w64-clang-aarch64-qemu-image-util 11.1.3-2'
+  moduleDirectory = 'lib/qemu'
 } | ConvertTo-Json -Depth 4
 Set-Content -Path (Join-Path $Out 'manifest.json') -Value $Manifest -Encoding utf8
 Copy-Item (Join-Path $ProjectRoot 'THIRD_PARTY_NOTICES.md') (Join-Path $Out 'THIRD_PARTY_NOTICES.md') -Force
