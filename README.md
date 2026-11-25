@@ -82,7 +82,7 @@ For OVF/VirtualBox descriptors, select the descriptor or containing folder. When
 5. Optionally configure an isolated UDP tunnel as described in [Network setup](docs/NETWORKING.md). Keep the attacker VM's normal internet adapter separate from the lab adapter.
 6. Use **Stop target** when finished.
 
-See [Installation](docs/INSTALLATION.md), [Networking](docs/NETWORKING.md), and [Architecture](docs/ARCHITECTURE.md) for details.
+See [Installation](docs/INSTALLATION.md), [Bundled QEMU runtime](docs/QEMU_RUNTIME.md), [Networking](docs/NETWORKING.md), and [Architecture](docs/ARCHITECTURE.md) for details.
 
 ## Build from source
 
