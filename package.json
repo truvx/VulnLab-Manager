@@ -1,16 +1,18 @@
 {
   "name": "vulnlab-manager",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
-  "description": "Cross-platform vulnerable machine library and QEMU target manager for macOS and Windows ARM64",
+  "description": "Cross-platform vulnerable machine manager with bundled QEMU for macOS Apple Silicon and Windows ARM64",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://127.0.0.1:5173 dist-electron/main.js && electron .\"",
     "build": "tsc -p tsconfig.electron.json && tsc -p tsconfig.json --noEmit && vite build",
     "start": "electron .",
     "package:mac": "npm run build && electron-builder --mac dmg zip --publish never",
-    "package:mac:arm64": "npm run build && electron-builder --mac dmg zip --arm64 --publish never",
-    "package:win:arm64": "npm run build && electron-builder --win nsis --arm64 --publish never"
+    "package:mac:arm64": "npm run runtime:bundle:mac:arm64 && npm run build && electron-builder --mac dmg zip --arm64 --publish never",
+    "package:win:arm64": "npm run runtime:bundle:win:arm64 && npm run build && electron-builder --win nsis --arm64 --publish never",
+    "runtime:bundle:mac:arm64": "bash scripts/bundle-qemu-macos.sh",
+    "runtime:bundle:win:arm64": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bundle-qemu-windows-arm64.ps1"
   },
   "dependencies": {
     "fast-xml-parser": "^5.3.0",
@@ -81,6 +83,13 @@
       {
         "from": "lab-network-setup.sh",
         "to": "network-setup/lab-network-setup.sh"
+      },
+      {
+        "from": "runtime/qemu",
+        "to": "qemu",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
