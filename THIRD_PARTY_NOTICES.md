@@ -34,7 +34,7 @@ The release workflow attaches this source package archive alongside the installe
 QEMU uses dynamically linked runtime libraries from the corresponding Homebrew or MSYS2 dependency set. These components remain subject to their own copyrights and license terms.
 
 - The macOS staging script copies shared dylibs from the installed recursive Homebrew dependency set and includes license directories when supplied by the formula.
-- The Windows staging script copies the transitive imported DLL dependencies from the MSYS2 CLANGARM64 runtime and includes the CLANGARM64 license directory when supplied by installed packages.
+- The Windows staging script copies the transitive imported DLL dependencies of the three QEMU command-line tools from the MSYS2 CLANGARM64 runtime and includes the CLANGARM64 license directory when supplied by installed packages. Optional QEMU instrumentation and test plugins under `lib/qemu/plugins/` (including examples such as `libbbv.dll`) are not included because the application does not load them.
 - Compiler toolchains, development headers, and unrelated package content are not bundled.
 
 Upstream package and dependency metadata:
