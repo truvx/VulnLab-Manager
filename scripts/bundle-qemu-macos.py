@@ -75,7 +75,7 @@ for name in tool_names:
 firmware_source = qemu_prefix / "share" / "qemu"
 if not firmware_source.is_dir():
     raise SystemExit(f"QEMU firmware/data directory is missing: {firmware_source}")
-shutil.copytree(firmware_source, SHARE / "qemu", dirs_exist_ok=True, symlinks=True)
+shutil.copytree(firmware_source, SHARE / "qemu", dirs_exist_ok=True, symlinks=False)
 
 # Preserve QEMU's optional loadable modules. QEMU_MODULE_DIR is set by the app
 # when this directory is present.
@@ -132,7 +132,7 @@ for formula, license_dir in license_roots:
     destination = licenses_out / formula
     if destination.exists():
         continue
-    shutil.copytree(license_dir, destination, dirs_exist_ok=True, symlinks=True)
+    shutil.copytree(license_dir, destination, dirs_exist_ok=True, symlinks=False)
 
 notice = ROOT / "THIRD_PARTY_NOTICES.md"
 shutil.copy2(notice, OUT / notice.name)
