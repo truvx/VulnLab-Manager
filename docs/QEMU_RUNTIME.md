@@ -22,7 +22,7 @@ resources/
     └── THIRD_PARTY_NOTICES.md
 ```
 
-The macOS runtime also contains the dylibs collected from the QEMU Homebrew dependency set. The Windows runtime contains the imported DLL dependency closure from MSYS2 CLANGARM64.
+The macOS runtime also contains the non-system dylibs found by walking the QEMU executables' and modules' actual dynamic-link dependencies with Apple's otool tools. The Windows runtime contains the imported DLL dependency closure from MSYS2 CLANGARM64.
 
 ## Pinned sources
 
@@ -54,7 +54,7 @@ The **System** checks in the application show the detected QEMU version and whet
 
 ### macOS Apple Silicon
 
-`scripts/bundle-qemu-macos.py` installs the Homebrew QEMU formula, checks the expected version, copies the system emulators, `qemu-img`, QEMU firmware/data, modules, shared dylibs, and available license files, then smoke-tests all three tools with the staged library path.
+`scripts/bundle-qemu-macos.py` installs the Homebrew QEMU formula, checks the expected version, copies the system emulators, `qemu-img`, QEMU firmware/data and modules, resolves the transitive dylib links with `otool`, rewrites library install names for the private runtime, copies available license files, and smoke-tests all three tools with the staged library path.
 
 ### Windows 11 ARM64
 
