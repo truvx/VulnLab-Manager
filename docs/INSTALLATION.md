@@ -1,6 +1,6 @@
 # Installation
 
-VulnLab Manager v0.5.0 installers include a platform-native QEMU 11.1.3 runtime, its required shared libraries, and QEMU firmware/data files. A separate QEMU installation is not required for the published installers.
+The planned v0.5.0 installers are configured to include a platform-native QEMU 11.1.3 runtime, its required shared libraries, and QEMU firmware/data files. A separate QEMU installation will not be required once those native builds pass validation.
 
 ## macOS — Apple Silicon
 
