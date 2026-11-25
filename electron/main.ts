@@ -144,6 +144,23 @@ async function isFile(candidate: string) {
   try { return (await fs.stat(candidate)).isFile(); } catch { return false; }
 }
 
+function qemuRuntimeEnvironment() {
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: hostPath() };
+  const runtimeRoot = bundledQemuRoot();
+  const moduleDir = path.join(runtimeRoot, 'lib', 'qemu');
+  if (process.platform === 'darwin') {
+    const libraryDir = path.join(runtimeRoot, 'lib');
+    env.DYLD_LIBRARY_PATH = [libraryDir, process.env.DYLD_LIBRARY_PATH].filter(Boolean).join(path.delimiter);
+  }
+  if (process.platform === 'win32') {
+    env.PATH = [bundledQemuBinDir(), process.env.PATH].filter(Boolean).join(path.delimiter);
+  }
+  if (fsSync.existsSync(path.join(moduleDir, '.runtime-marker'))) {
+    env.QEMU_MODULE_DIR = moduleDir;
+  }
+  return env;
+}
+
 function hostPath() {
   // GUI-launched applications do not always inherit the user's interactive shell PATH.
   const additions = process.platform === 'darwin'
@@ -204,7 +221,7 @@ async function runTool(command: string, args: string[], options: ExecFileOptions
   return execFileAsync(executable, args, {
     encoding: 'utf8',
     ...options,
-    env: { ...process.env, PATH: hostPath() }
+    env: qemuRuntimeEnvironment()
   });
 }
 
@@ -216,7 +233,7 @@ async function getSystemInfo() {
   if (qemuExecutable) {
     try {
       const { stdout } = await execFileAsync(qemuExecutable, ['--version'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: hostPath() } });
-      qemuVersion = stdout.split(/\\r?\\n/)[0]?.trim() ?? null;
+      qemuVersion = stdout.split(/\r?\n/)[0]?.trim() ?? null;
     } catch (error) {
       log(`QEMU version check warning: ${String(error)}`);
     }
@@ -598,9 +615,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   log(`QEMU disk: ${machine.diskPath}`);
   const qemuExecutable = await resolveCommand(qemuBinary(architecture));
   if (!qemuExecutable) throw new Error(`${qemuBinary(architecture)} was not found. Install QEMU and restart the app.`);
-  const qemuModuleDir = path.join(bundledQemuRoot(), 'lib', 'qemu');
-  const runtimeEnv = { ...process.env, PATH: hostPath(), ...(await isFile(path.join(qemuModuleDir, '.runtime-marker')) ? { QEMU_MODULE_DIR: qemuModuleDir } : {}) };
-  const child = spawn(qemuExecutable, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: runtimeEnv });
+  const child = spawn(qemuExecutable, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: qemuRuntimeEnvironment() });
   targetProcess = child;
   activeMachineId = id;
   child.stdout?.on('data', (chunk: Buffer) => log(`QEMU: ${chunk.toString().trim()}`));
