@@ -83,6 +83,25 @@ jobs:
         run: |
           cd release-assets
           sha256sum * > SHA256SUMS.txt
+      - name: Remove a stale version tag when it points at an older commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: v${{ inputs.version }}
+          TARGET_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          get_ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG_NAME}"
+          delete_ref="repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG_NAME}"
+          if current_sha="$(gh api "${get_ref}" --jq '.object.sha' 2>/dev/null)"; then
+            if [ "${current_sha}" != "${TARGET_SHA}" ]; then
+              echo "Removing stale ${TAG_NAME} reference (${current_sha})"
+              gh api --method DELETE "${delete_ref}"
+            else
+              echo "${TAG_NAME} already points to the selected source commit"
+            fi
+          else
+            echo "No existing ${TAG_NAME} reference; the release action will create it"
+          fi
       - name: Create GitHub Release and attach installers
         uses: softprops/action-gh-release@v2
         with:
