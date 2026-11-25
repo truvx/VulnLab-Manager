@@ -601,7 +601,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   log(`Created disposable write overlay: ${overlayPath}`);
   const qemuDiskPath = process.platform === 'win32' ? overlayPath.replace(/\\/g, '/') : overlayPath;
   const qemuArgs = [
-    ...(await isFile(path.join(bundledQemuDataDir(), 'bios.bin')) ? ['-L', bundledQemuDataDir()] : []),
+    ...(existsSync(bundledQemuDataDir()) ? ['-L', bundledQemuDataDir()] : []),
     '-machine', 'pc', '-accel', 'tcg', '-cpu', 'max', '-smp', '1', '-m', String(memoryMiB),
     '-name', machine.name,
     '-drive', `file=${qemuDiskPath},format=qcow2,if=ide,index=0`,
