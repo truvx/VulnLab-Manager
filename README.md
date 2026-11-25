@@ -3,7 +3,7 @@
   <h1>VulnLab Manager</h1>
   <p><strong>A local-first vulnerable machine library and QEMU target manager.</strong></p>
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.4.0-6477f5" />
+    <img alt="Version" src="https://img.shields.io/badge/version-0.5.0-6477f5" />
     <a href="https://github.com/truvx/VulnLab-Manager/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/truvx/VulnLab-Manager/actions/workflows/ci.yml/badge.svg" /></a>
     <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon-111111?logo=apple" />
     <img alt="Windows" src="https://img.shields.io/badge/Windows-ARM64-0078D4?logo=windows" />
@@ -34,7 +34,8 @@ Release assets include a `SHA256SUMS.txt` file. Compare the checksum before inst
 - **Local machine library** — import, inspect, organize, start, and stop target images locally.
 - **Source-independent importing** — no hard dependency on VulnHub or another training provider.
 - **Archive and disk inspection** — ZIP, OVA, TAR, OVF/VBox folders, and common virtual disk formats.
-- **QEMU target execution** — x86_64 and i386 guest emulation using TCG.
+- **Bundled QEMU engine** — pinned QEMU 11.1.3 host runtimes for macOS Apple Silicon and Windows ARM64; no separate QEMU installation is required for release installers.
+- **QEMU target execution** — x86_64 and i386 guest emulation using TCG software translation.
 - **Disposable write overlays** — QEMU writes to a per-run QCOW2 overlay so the imported base image remains unchanged.
 - **Manual attacker workflow** — attacker VMs are intentionally outside the application's lifecycle control.
 - **Isolated UDP networking option** — a QEMU datagram endpoint can be paired with a compatible hypervisor UDP tunnel.
@@ -46,21 +47,23 @@ Release assets include a `SHA256SUMS.txt` file. Compare the checksum before inst
 | Component | Supported in this release |
 |---|---|
 | Host OS | macOS 13+ (Apple Silicon); Windows 11 ARM64 |
-| Host virtualization | QEMU is required; attacker VM hypervisor is user-managed |
-| QEMU tools | `qemu-system-x86_64`, `qemu-system-i386`, `qemu-img` |
+| Host virtualization | Bundled QEMU 11.1.3; attacker VM hypervisor is user-managed |
+| QEMU tools | Bundled `qemu-system-x86_64`, `qemu-system-i386`, and `qemu-img` |
 | Concurrent targets | One QEMU target at a time |
 | Guest profile | x86_64 or i386, BIOS, IDE disk, E1000 network adapter |
 
 The launch profile is intentionally conservative. Images requiring UEFI, VirtIO/SCSI controllers, other NIC models, GPU passthrough, or a different CPU model may need future per-machine hardware profiles. A file format being importable does not guarantee every guest will boot under the current default hardware profile.
 
-### QEMU installation
+### Bundled QEMU engine
 
-Install a QEMU distribution compatible with your host architecture and add its executable directory to `PATH`.
+The v0.5.0 installers include a host-native QEMU 11.1.3 runtime, firmware/data files, and the runtime libraries needed by the bundled tools.
 
-- **macOS Apple Silicon:** `brew install qemu`
-- **Windows ARM64:** install a Windows ARM64 QEMU build and ensure the directory containing `qemu-system-x86_64.exe`, `qemu-system-i386.exe`, and `qemu-img.exe` is in your user or system `PATH`.
+- **macOS Apple Silicon:** native ARM64 QEMU runtime staged from the Homebrew QEMU formula.
+- **Windows 11 ARM64:** native ARM64 QEMU runtime staged from the MSYS2 CLANGARM64 packages.
 
-The app checks for these tools at startup. QEMU is not bundled in the installer.
+The application prefers its bundled runtime and falls back to a compatible QEMU installation on `PATH` for development or advanced use. It displays the detected QEMU version and whether the bundled runtime is active.
+
+QEMU uses TCG software emulation to run x86/i386 guests on ARM64 hosts. This provides compatibility without a separate QEMU setup, but emulation can be slower than running the same guest on an x86_64 host. The release does not promise that every image will boot: guest firmware, disk controller, CPU model, and network-device requirements still matter.
 
 ## Import formats
 
@@ -72,19 +75,18 @@ For OVF/VirtualBox descriptors, select the descriptor or containing folder. When
 
 ## First run
 
-1. Install QEMU and verify its executables are on `PATH`.
-2. Install VulnLab Manager using the installer for your host architecture.
-3. Open the app and import a local VM package, VM folder, or disk image.
-4. Select a machine, choose guest architecture and memory, then select **Start target**.
-5. Start your preferred attacker VM manually.
-6. Optionally configure an isolated UDP tunnel as described in [Network setup](docs/NETWORKING.md). Keep the attacker VM's normal internet adapter separate from the lab adapter.
-7. Use **Stop target** when finished.
+1. Install VulnLab Manager using the installer for your host architecture; QEMU is included.
+2. Open the app and import a local VM package, VM folder, or disk image.
+3. Select a machine, choose guest architecture and memory, then select **Start target**.
+4. Start your preferred attacker VM manually.
+5. Optionally configure an isolated UDP tunnel as described in [Network setup](docs/NETWORKING.md). Keep the attacker VM's normal internet adapter separate from the lab adapter.
+6. Use **Stop target** when finished.
 
 See [Installation](docs/INSTALLATION.md), [Networking](docs/NETWORKING.md), and [Architecture](docs/ARCHITECTURE.md) for details.
 
 ## Build from source
 
-Requirements: Node.js 22+ (Node 24 is used in CI), npm, and QEMU for running targets.
+Requirements: Node.js 22+ (Node 24 is used in CI) and npm. Platform-native QEMU staging tools are required only when making packaged installers.
 
 ```bash
 npm ci
@@ -95,6 +97,8 @@ npm run dev
 
 **macOS Apple Silicon**
 
+Requirements: Homebrew and Python 3. The build script installs the pinned Homebrew QEMU formula, stages QEMU 11.1.3 plus its dylib dependencies and firmware, smoke-tests the tools, then builds the DMG/ZIP.
+
 ```bash
 npm ci
 npm run package:mac:arm64
@@ -102,22 +106,23 @@ npm run package:mac:arm64
 
 Or double-click `Build-Mac-App.command`.
 
-**Windows ARM64**
+**Windows 11 ARM64**
+
+Requirements: a native Windows ARM64 host and MSYS2 CLANGARM64 with `binutils`, `mingw-w64-clang-aarch64-qemu`, and `mingw-w64-clang-aarch64-qemu-image-util`. The release workflow prepares these packages automatically; a local package build requires the same toolchain. The script stages the required ARM64 executables, DLL dependencies, and firmware before building the EXE.
 
 ```powershell
 npm ci
 npm run package:win:arm64
 ```
 
-Or right-click `Build-Windows-ARM64.ps1` and run it with PowerShell (or execute it from a PowerShell terminal).
+Or run `Build-Windows-ARM64.ps1` in PowerShell.
 
 Build artifacts are written to `release/`.
 
 ## Automated releases
 
 - Pull requests and pushes to `main` run the TypeScript/renderer validation workflow.
-- Push a tag such as `v0.4.0` to build the macOS ARM64 DMG/ZIP and Windows ARM64 EXE, then attach them to a GitHub Release.
-- Alternatively, run **Build installers and publish release** from the Actions tab and supply a release tag.
+- Run **Build installers and publish GitHub Release** from the Actions tab and enter the release version (for example `0.5.0`). The workflow builds both native runtimes, packages them into the installers, attaches the corresponding QEMU source archives, and publishes the GitHub Release.
 
 The release pipeline uses native ARM64 GitHub-hosted runners on macOS and Windows. See `.github/workflows/release.yml`.
 
@@ -137,7 +142,7 @@ Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## Project status
 
-This is an actively developed desktop utility. The source build and CI pipeline are provided, but compatibility still varies by guest firmware, storage controller, NIC, and host QEMU build. The installers should be treated as unsigned until signing/notarization is configured. See [CHANGELOG.md](CHANGELOG.md) and [PROJECT_STATUS.md](PROJECT_STATUS.md).
+This is an actively developed desktop utility. The bundled QEMU runtime is pinned for reproducible builds. Compatibility still varies by guest firmware, storage controller, NIC, and target-image requirements. The installers should be treated as unsigned until signing/notarization is configured. See [CHANGELOG.md](CHANGELOG.md) and [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ## License
 
