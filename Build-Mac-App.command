@@ -23,6 +23,17 @@ if (( NODE_MAJOR < 22 )); then
   exit 1
 fi
 
+if ! command -v brew >/dev/null 2>&1; then
+  echo "Homebrew is required to stage the bundled QEMU runtime. Install it from https://brew.sh/ and rerun this file."
+  read -r -p "Press Enter to close..."
+  exit 1
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Python 3 is required to stage the bundled QEMU runtime."
+  read -r -p "Press Enter to close..."
+  exit 1
+fi
+
 if [[ "$(uname -m)" != "arm64" ]]; then
   echo "Warning: this Mac is not Apple Silicon. The script will still build the ARM64 target."
 fi
@@ -30,7 +41,7 @@ fi
 echo "Installing locked dependencies..."
 npm ci
 
-echo "Building the Apple Silicon macOS app..."
+echo "Staging bundled QEMU and building the Apple Silicon macOS app..."
 npm run package:mac:arm64
 
 echo "Build complete. Opening the release folder..."
