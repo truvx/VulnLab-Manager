@@ -26,5 +26,7 @@ export interface AppState {
     qemuX86: boolean;
     qemuImg: boolean;
     qemuI386: boolean;
+    qemuBundled: boolean;
+    qemuVersion: string | null;
   };
 }
