@@ -1,28 +1,38 @@
-# Project Status — 0.4.0
+# Project Status — 0.5.0 development
 
-## Implemented
+## Implemented in source
 
 - General-purpose local machine library and QEMU target lifecycle.
 - ZIP/OVA/TAR, OVF/VBox folder, and direct virtual disk import paths.
 - Safe archive path checks and rejection of archive symlinks.
 - Per-run QCOW2 write overlays to protect imported base disks.
-- macOS Apple Silicon DMG/ZIP packaging configuration.
-- Windows ARM64 NSIS `.exe` packaging configuration.
-- Platform-aware QEMU executable resolution and display backend selection.
-- GitHub Actions CI and ARM64 release automation.
+- Native macOS Apple Silicon and Windows ARM64 desktop packaging.
+- Bundled QEMU 11.1.3 staging scripts for both host platforms.
+- Bundled QEMU executable, firmware/data, module, and runtime-library discovery in the Electron main process.
+- Runtime version detection and bundled-vs-system QEMU indication in the UI.
+- Native MSYS2 CLANGARM64 QEMU package setup in the Windows ARM64 release workflow.
+- Release workflow source archive attachments for QEMU and the MSYS2 Windows package recipe.
 - Generic optional Linux network helper for manual guest-side use.
+- Attacker VMs remain fully manual; the app starts/stops only its own QEMU target.
 
-## Current constraints
+## Release validation still required
 
+- The QEMU bundling scripts are committed but have not yet completed their native macOS/Windows ARM64 release workflow validation.
+- The macOS packaging runner must successfully stage all Homebrew dylibs, then smoke-test QEMU system emulators and qemu-img.
+- The Windows ARM64 runner must stage the CLANGARM64 executable/DLL closure, then smoke-test QEMU system emulators and qemu-img.
+- Both installers must be tested after packaging to confirm the runtime is actually found under Electron's resources directory.
+- Compatibility remains image-specific. The current default guest profile is BIOS/IDE/E1000 and will not boot every imported machine.
 - One QEMU target at a time.
-- Default guest hardware profile is BIOS/IDE/E1000 and may not boot every imported image.
-- QEMU must be installed separately and discoverable on PATH.
 - Attacker VMs are never started, stopped, or reconfigured by this application.
 - The optional UDP tunnel requires the user to configure the attacker VM or its hypervisor manually.
 - Releases are unsigned and macOS notarization is not configured.
-- Windows ARM64 packaging is configured to build on a native ARM64 runner; actual installer smoke testing remains a release verification step.
 - No project license has been selected yet.
+
+## Runtime sources
+
+- macOS ARM64: Homebrew QEMU 11.1.3.
+- Windows ARM64: MSYS2 CLANGARM64 QEMU 11.1.3-2 plus the matching qemu-image-util and qemu-common packages.
 
 ## Verification
 
-Source-level changes have been made for cross-platform paths and QEMU display handling. Run `npm ci` and `npm run build` before merging. The GitHub release workflow builds actual installers on native macOS ARM64 and Windows ARM64 runners.
+Run `npm ci` and `npm run build` for TypeScript/renderer validation. Run the native platform packaging scripts on Apple Silicon macOS and Windows 11 ARM64 to validate the QEMU runtime collectors. The release workflow is configured to run these checks on native ARM64 runners and publish installers plus corresponding QEMU source archives.
