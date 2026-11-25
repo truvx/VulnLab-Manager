@@ -155,7 +155,7 @@ function qemuRuntimeEnvironment() {
   if (process.platform === 'win32') {
     env.PATH = [bundledQemuBinDir(), process.env.PATH].filter(Boolean).join(path.delimiter);
   }
-  if (existsSync(path.join(moduleDir, '.runtime-marker'))) {
+  if (existsSync(moduleDir)) {
     env.QEMU_MODULE_DIR = moduleDir;
   }
   return env;
