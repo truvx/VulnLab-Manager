@@ -28,3 +28,8 @@ jobs:
         run: npm ci
       - name: Validate TypeScript and build renderer
         run: npm run build
+      - name: Validate QEMU runtime staging scripts
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/bundle-qemu-macos.py
+          pwsh -NoProfile -Command '$tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile("scripts/bundle-qemu-windows-arm64.ps1", [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }'
