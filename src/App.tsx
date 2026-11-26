@@ -78,11 +78,19 @@ export default function App() {
 
   async function saveNetworkSettings() {
     if (!selectedMachine) return;
-    await runAction(
-      () => window.lab.saveNetworkConfig(selectedMachine.id, { networkMode, networkAdapter, portForwards }),
-      'Saved network settings. Restart the target to apply them.'
-    );
-    setNetworkDirty(false);
+    setBusy(true);
+    setNotice(null);
+    try {
+      await window.lab.saveNetworkConfig(selectedMachine.id, { networkMode, networkAdapter, portForwards });
+      await refresh();
+      setNetworkDirty(false);
+      setNotice({ type: 'success', text: 'Saved network settings. Restart the target to apply them.' });
+    } catch (error) {
+      setNotice({ type: 'error', text: error instanceof Error ? error.message : String(error) });
+      setNetworkDirty(true);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function updatePortForward(id: string, patch: Partial<PortForwardRule>) {
@@ -207,7 +215,7 @@ export default function App() {
                 <label className="field-label" htmlFor="tap-adapter">Host TAP adapter</label>
                 <input id="tap-adapter" className="network-adapter-input" list="tap-adapter-options" value={networkAdapter} onChange={(event) => { setNetworkAdapter(event.target.value); setNetworkDirty(true); }} placeholder={system?.platform === 'darwin' ? 'tap0' : 'TAP-Windows Adapter V9'}/>
                 <datalist id="tap-adapter-options">
-                  {(system?.tapDevices?.length ? system.tapDevices : system?.networkInterfaceNames ?? []).map((name) => <option key={name} value={name}/>)}
+                  {(system?.tapDevices ?? []).map((name) => <option key={name} value={name}/>)}
                 </datalist>
                 <div className="network-help">
                   <strong>Layer-2 bridge through a host TAP device</strong>
