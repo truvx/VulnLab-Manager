@@ -29,3 +29,29 @@
 .save-network{margin-top:10px}
 .guest-ip{color:#9cbbff!important}
 @media(max-width:1100px){.forward-row,.forward-add{grid-template-columns:54px minmax(45px,1fr) 10px minmax(45px,1fr) 24px}.network-config{padding:9px}}
+
+/* Compact import + activity row and live QEMU NIC monitor */
+.import-activity-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;margin-bottom:18px}
+.import-activity-grid .drop-zone{min-height:118px;margin:0;padding:16px 18px;gap:12px}
+.import-activity-grid .drop-icon{width:40px;height:40px;flex-shrink:0}
+.import-activity-grid .drop-copy h2{font-size:12px}
+.import-activity-grid .drop-copy p{line-height:1.5}
+.logs-panel-compact{padding:12px 14px;display:flex;flex-direction:column;min-height:118px}
+.logs-panel-compact .panel-heading{margin-bottom:8px}
+.logs-panel-compact .log-view{max-height:73px;min-height:61px;flex:1;padding:6px 8px}
+.logs-panel-compact .log-view div{padding:2px 0;font-size:8px}
+.traffic-panel{margin-bottom:17px}
+.traffic-state{font:9px 'DM Mono',monospace;letter-spacing:.07em;color:#9aa9ba;background:#222d39;border:1px solid #344252;padding:6px 9px;border-radius:20px}
+.traffic-state.active{color:#8be0ba;background:#17382e;border-color:#2e624d}
+.traffic-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.traffic-metrics>div{display:flex;flex-direction:column;gap:4px;min-width:0;padding:11px 12px;background:#111923;border:1px solid #283746;border-radius:8px}
+.traffic-metrics span{font-size:9px;color:#8b9caf}
+.traffic-metrics strong{font:600 19px 'DM Mono',monospace;color:#e0e9f4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.traffic-metrics small{font:8px 'DM Mono',monospace;color:#768aa2}
+.traffic-metrics .traffic-last{font-size:14px}
+.traffic-peers{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:10px 12px;background:#101923;border:1px solid #283746;border-radius:8px}
+.traffic-peers strong{font-size:9px;color:#b9c8da}
+.traffic-peers span{font:9px 'DM Mono',monospace;color:#95a8bf;overflow-wrap:anywhere}
+.traffic-empty{padding:16px;background:#111923;border:1px dashed #35485b;border-radius:8px;color:#899caf;font-size:10px;text-align:center}
+.traffic-footnote{margin:8px 0 0;color:#71839a;font-size:8px;line-height:1.5}
+@media(max-width:1120px){.import-activity-grid{grid-template-columns:1fr}.import-activity-grid .drop-zone{min-height:108px}.traffic-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
