@@ -45,5 +45,8 @@ export interface AppState {
     hostIPv4Addresses: string[];
     networkInterfaceNames: string[];
     tapDevices: string[];
+    bridgeAdapters: string[];
+    vmnetSocketClientAvailable: boolean;
+    vmnetBridgedSockets: string[];
   };
 }
