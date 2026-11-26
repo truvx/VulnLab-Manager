@@ -58,6 +58,7 @@ let captureReadOffset = 0;
 let captureByteOrder: 'le' | 'be' | null = null;
 let captureLinkType: number | null = null;
 let trafficStats: NetworkTrafficStats = emptyTrafficStats();
+let trafficCleanupPromise: Promise<void> = Promise.resolve();
 let targetLog = '';
 
 function emptyTrafficStats(): NetworkTrafficStats {
@@ -909,6 +910,7 @@ async function finishTrafficCapture() {
 
 async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryMiB: number) {
   if (targetProcess && !targetProcess.killed) throw new Error('A QEMU target is already running. Stop it before starting another target.');
+  await trafficCleanupPromise;
   const machines = await readMachines();
   const machine = machines.find((item) => item.id === id);
   if (!machine) throw new Error('Machine not found in the library.');
@@ -956,7 +958,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   child.on('error', (error) => {
     const exitedId = activeMachineId;
     log(`QEMU launch error: ${error.message}`);
-    void finishTrafficCapture();
+    trafficCleanupPromise = finishTrafficCapture();
     targetProcess = null;
     activeMachineId = null;
     if (exitedId) void readMachines().then((items) => writeMachines(items.map((item) => item.id === exitedId ? { ...item, status: 'stopped' as const } : item)));
@@ -989,6 +991,7 @@ async function stopMachine() {
     }, 5000);
     child.once('exit', () => { clearTimeout(timeout); resolve(); });
   });
+  await trafficCleanupPromise;
   const machines = await readMachines();
   await writeMachines(machines.map((item) => item.id === stoppingId ? { ...item, status: 'stopped' as const } : item));
   targetProcess = null;
