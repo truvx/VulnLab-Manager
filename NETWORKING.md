@@ -1,6 +1,6 @@
 # QEMU target networking
 
-VulnLab Manager configures networking independently for each imported machine. The application starts and stops **only its selected QEMU target**. It does not start, stop, or reconfigure Kali, Parrot, VirtualBox, or another attacker VM.
+VulnLab Manager configures networking independently for each imported machine and includes a live QEMU NIC monitor. The monitor records packet counts, byte counts, and peer IP addresses using a maximum 54-byte packet prefix (which can contain a short payload prefix); the temporary pcap is deleted when the target exits. The application starts and stops **only its selected QEMU target**. It does not start, stop, or reconfigure Kali, Parrot, VirtualBox, or another attacker VM.
 
 Choose **NAT** for the simplest cross-platform setup, or **Bridged** when you need full Layer-2 access (ARP discovery and unrestricted port scans) between the target and attacker VM. macOS uses socket_vmnet; Windows ARM64 uses a TAP-Windows adapter.
 
@@ -79,8 +79,24 @@ macOS uses the [socket_vmnet](https://github.com/lima-vm/socket_vmnet) helper. Q
    This installs a root-owned system LaunchDaemon for the chosen interface. It creates the socket at `$(brew --prefix)/var/run/socket_vmnet.bridged.en0`. Only do this for software and configuration you trust; socket_vmnet needs root to call Apple's vmnet framework. The daemon is separate from VulnLab Manager and is not started or stopped by the app.
 
 4. In VulnLab Manager, select **Bridged**, choose the same interface name (for example `en0`), save, then start the target. The app launches QEMU through `socket_vmnet_client` and does not run QEMU as root.
-5. In VirtualBox, power off Kali/Parrot and configure the attacker VM's second adapter as **Bridged Adapter**, selecting the same physical interface (for example `en0`). Keep the first adapter as your regular internet connection if needed. Start the attacker VM and let its lab adapter obtain DHCP on the same LAN/subnet as the QEMU target.
-6. Check the target's displayed IP or run an ARP scan from the attacker's bridged adapter.
+5. In VirtualBox, power off Kali/Parrot and configure the attacker VM's second adapter as **Bridged Adapter**, selecting the same physical interface (for example `en0`). Keep the first adapter as your regular internet connection if needed.
+6. If the Linux attacker VM still has the old static UDP-tunnel profile (for example `VulnLab-Lab` with `192.168.77.1/24`), change that second adapter to DHCP so it joins the bridged LAN:
+
+   ```bash
+   sudo nmcli connection modify "VulnLab-Lab" ipv4.method auto ipv4.addresses "" ipv4.gateway "" ipv4.never-default yes
+   sudo nmcli connection up "VulnLab-Lab"
+   ip -br addr show eth1
+   ```
+
+   Use your actual connection/profile and interface names if they differ. Keep `ipv4.never-default yes` so the lab interface does not replace the attacker's normal default internet route.
+7. Start the attacker VM and QEMU target. Confirm they received addresses in the same subnet, then scan the segment from Kali/Parrot:
+
+   ```bash
+   sudo arp-scan --interface=eth1 --localnet
+   sudo nmap -sn <LAB-SUBNET>
+   ```
+
+   The target's IP should appear in the QEMU machine list once the host ARP table has learned its MAC address.
 
 **Important:** Bridging onto Wi-Fi may be restricted by some access points, enterprise networks, or VirtualBox/macOS driver behavior. A wired Ethernet interface and a dedicated isolated switch/VLAN are more reliable. Never bridge an intentionally vulnerable target to a public or trusted home/work LAN.
 
@@ -99,8 +115,9 @@ QEMU's Windows TAP backend needs a separate TAP network driver; it is not includ
 1. Install a signed ARM64-compatible NDIS 6.30 TAP-Windows driver. The upstream [OpenVPN tap-windows6 project](https://github.com/OpenVPN/tap-windows6) documents the ARM64 driver build/installation requirements. NDIS 6.20 is not sufficient on ARM64 desktop systems; use an NDIS 6.30 driver.
 2. In an Administrator PowerShell, inspect adapters with `Get-NetAdapter`.
 3. In VulnLab Manager select **Bridged** and enter the exact TAP adapter interface name shown by Windows.
-4. Connect the TAP adapter and the attacker VM to the same isolated Layer-2 network using Windows networking/VirtualBox settings. This host-side bridge setup requires administrator approval and is intentionally not performed by VulnLab Manager.
-5. Start the target and confirm that a DHCP server on the shared segment assigns an IP address.
+4. Open Network Connections (`ncpa.cpl`) as an administrator. Select the TAP adapter and the intended lab-facing Ethernet adapter, then use **Bridge Connections** so QEMU's TAP interface is connected to the isolated lab segment. Do not bridge the TAP interface to an internet-facing or trusted network.
+5. In VirtualBox, set the attacker's second adapter to **Bridged Adapter** on the same lab-facing network (or the resulting Network Bridge, as appropriate for your Windows setup). Keep its normal internet adapter separate. This host-side bridge setup requires administrator approval and is intentionally not performed by VulnLab Manager.
+6. Start the target and confirm that a DHCP server on the shared segment assigns an IP address.
 
 If Windows does not expose a compatible TAP adapter, use NAT mode. Do not install unsigned test drivers or disable Secure Boot just to make a lab network work.
 
@@ -112,7 +129,7 @@ Bridged mode places the vulnerable guest on the chosen Layer-2 network. Do not b
 
 - NAT mode displays the QEMU DHCP address expected by the built-in user network (10.77.0.15) while the target is running.
 - Bridged mode attempts to resolve the guest's configured virtual MAC address from the host ARP table. It may show **waiting for DHCP/ARP** until the guest has requested an address or exchanged traffic.
-- The host IPv4 addresses displayed in the NAT settings are the addresses the attacker VM should use to reach forwarded host ports. They are not the guest's NAT IP.
+- The host IPv4 addresses displayed in NAT settings are the addresses the attacker VM should use to reach forwarded host ports. They are not the guest's NAT IP.
 
 ## Network setup helper
 
