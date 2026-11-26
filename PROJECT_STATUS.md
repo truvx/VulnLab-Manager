@@ -30,7 +30,7 @@
 - One QEMU target at a time.
 - Attacker VMs are never started, stopped, or reconfigured by this application.
 - NAT provides attacker access only to explicitly forwarded services; it is not Layer-2 adjacency and cannot expose unforwarded ports to scans.
-- Bridged TAP requires a host TAP driver/device and user-managed Layer-2 bridging to the attacker's isolated network. No kernel driver or host network bridge is installed automatically.
+- macOS bridged mode uses the socket_vmnet client and a user-installed root LaunchDaemon for the selected enX interface. Windows ARM64 uses a separately installed TAP-Windows NDIS 6.30 adapter. The user must connect the attacker VM to the same isolated Layer-2 segment; no network driver or bridge is installed automatically.
 - macOS bridged mode requires the external socket_vmnet root LaunchDaemon for the selected enX interface; native bridged networking has not yet been tested on this Mac.
 - Windows ARM64 bridged mode requires a signed TAP-Windows NDIS 6.30 driver and a user-configured Layer-2 bridge to the attacker VM.
 - Releases are unsigned and macOS notarization is not configured.
