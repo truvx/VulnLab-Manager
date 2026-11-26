@@ -22,7 +22,7 @@ resources/
     └── THIRD_PARTY_NOTICES.md
 ```
 
-The macOS runtime also contains the non-system dylibs found by walking the QEMU executables' and modules' actual dynamic-link dependencies with Apple's otool tools. The Windows runtime contains the imported DLL dependency closure from MSYS2 CLANGARM64. Optional QEMU instrumentation and test plugins under `lib/qemu/plugins/` are excluded because VulnLab Manager does not load QEMU plugins.
+The macOS runtime also contains the non-system dylibs found by walking the QEMU executables' and modules' actual dynamic-link dependencies with Apple's otool tools. The Windows runtime contains the imported DLL dependency closure from MSYS2 CLANGARM64. The bundler also stages `librav1e.dll` as `rav1e.dll` because dependent PE import records request that DLL name. Optional QEMU instrumentation and test plugins under `lib/qemu/plugins/` are excluded because VulnLab Manager does not load QEMU plugins.
 
 ## Pinned sources
 
