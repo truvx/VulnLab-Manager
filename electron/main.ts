@@ -792,7 +792,7 @@ async function buildNetworkArguments(machine: MachineRecord): Promise<string[]> 
       if (!knownTapAdapters.includes(adapter)) {
         throw new Error(`TAP adapter "${adapter}" was not found by Windows. Install the ARM64 TAP-Windows NDIS 6.30 driver, then select its adapter name from the detected list.`);
       }
-      return ['-netdev', `tap,id=labnet,ifname=${adapter},script=no,downscript=no`, '-device', `e1000,netdev=labnet,mac=${mac}`];
+      return ['-netdev', `tap,id=labnet,ifname=${adapter}`, '-device', `e1000,netdev=labnet,mac=${mac}`];
     }
     throw new Error('Bridged networking is not configured for this host platform.');
   }
