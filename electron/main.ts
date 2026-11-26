@@ -219,7 +219,12 @@ async function resolveCommand(command: string): Promise<string | null> {
   const known: Record<string, string[]> = process.platform === 'darwin' ? {
     'qemu-system-x86_64': ['/opt/homebrew/bin/qemu-system-x86_64', '/usr/local/bin/qemu-system-x86_64'],
     'qemu-system-i386': ['/opt/homebrew/bin/qemu-system-i386', '/usr/local/bin/qemu-system-i386'],
-    'qemu-img': ['/opt/homebrew/bin/qemu-img', '/usr/local/bin/qemu-img']
+    'qemu-img': ['/opt/homebrew/bin/qemu-img', '/usr/local/bin/qemu-img'],
+    'socket_vmnet_client': [
+      '/opt/homebrew/opt/socket_vmnet/bin/socket_vmnet_client',
+      '/opt/local/bin/socket_vmnet_client',
+      '/opt/socket_vmnet/bin/socket_vmnet_client'
+    ]
   } : process.platform === 'win32' ? {
     'qemu-system-x86_64': [path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'qemu', 'qemu-system-x86_64.exe')],
     'qemu-system-i386': [path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'qemu', 'qemu-system-i386.exe')],
@@ -255,6 +260,15 @@ async function runTool(command: string, args: string[], options: ExecFileOptions
   });
 }
 
+function socketVmnetSocketCandidates(adapter: string): string[] {
+  const prefix = process.env.HOMEBREW_PREFIX || '/opt/homebrew';
+  return [
+    path.join(prefix, 'var', 'run', `socket_vmnet.bridged.${adapter}`),
+    path.join('/opt/local/var/run', `socket_vmnet.bridged.${adapter}`),
+    path.join('/var/run', `socket_vmnet.bridged.${adapter}`)
+  ];
+}
+
 async function getHostNetworkInfo() {
   const interfaces = os.networkInterfaces();
   const hostIPv4Addresses = [...new Set(Object.values(interfaces).flatMap((items) =>
@@ -262,16 +276,23 @@ async function getHostNetworkInfo() {
   ))];
   const networkInterfaceNames = Object.keys(interfaces).filter((name) => name !== 'lo' && name !== 'lo0');
   let tapDevices: string[] = [];
+  let bridgeAdapters: string[] = [];
   if (process.platform === 'darwin') {
-    try {
-      tapDevices = (await fs.readdir('/dev')).filter((name) => /^tap\\d+$/.test(name)).sort();
-    } catch {
-      tapDevices = [];
-    }
+    // socket_vmnet bridges QEMU to the selected macOS physical interface without
+    // requiring the QEMU process itself to run as root.
+    bridgeAdapters = networkInterfaceNames.filter((name) => /^en\\d+$/.test(name)).sort();
   } else if (process.platform === 'win32') {
     tapDevices = networkInterfaceNames.filter((name) => /tap|openvpn/i.test(name));
+    bridgeAdapters = tapDevices;
   }
-  return { hostIPv4Addresses, networkInterfaceNames, tapDevices };
+  const vmnetSocketClientAvailable = process.platform === 'darwin'
+    ? !!(await resolveCommand('socket_vmnet_client'))
+    : false;
+  const vmnetBridgedSockets = process.platform === 'darwin'
+    ? (await Promise.all(bridgeAdapters.flatMap((adapter) => socketVmnetSocketCandidates(adapter))
+      .map(async (candidate) => await pathExists(candidate) ? candidate : null))).filter((item): item is string => !!item)
+    : [];
+  return { hostIPv4Addresses, networkInterfaceNames, tapDevices, bridgeAdapters, vmnetSocketClientAvailable, vmnetBridgedSockets };
 }
 
 async function resolveGuestIpByMac(macAddress: string): Promise<string | null> {
@@ -707,21 +728,21 @@ function buildNetworkArguments(machine: MachineRecord): string[] {
   const mac = machine.macAddress || machineMac(machine.id);
   if (mode === 'bridged') {
     const adapter = (machine.networkAdapter ?? '').trim();
-    if (!adapter) throw new Error('Bridged networking requires a TAP adapter name. Open Machine configuration → Network mode to select one.');
+    if (!adapter) throw new Error('Choose a host network adapter in Machine configuration before starting this bridged target.');
     if (process.platform === 'darwin') {
-      if (!existsSync(path.join('/dev', adapter))) {
-        throw new Error(`TAP device /dev/${adapter} was not found. Install/configure a macOS TAP driver and create the device first, or switch this machine to NAT.`);
-      }
-      return ['-netdev', `tap,id=labnet,ifname=${adapter},script=no,downscript=no`, '-device', `e1000,netdev=labnet,mac=${mac}`];
+      if (!/^en\\d+$/.test(adapter)) throw new Error('On macOS, choose a physical network interface such as en0 or en1.');
+      // socket_vmnet_client passes an already-connected socket to QEMU on fd 3.
+      // The launcher wrapper is selected in startMachine after the socket is validated.
+      return ['-netdev', 'socket,id=labnet,fd=3', '-device', `e1000,netdev=labnet,mac=${mac}`];
     }
     if (process.platform === 'win32') {
       const knownInterfaces = Object.keys(os.networkInterfaces());
-      if (!knownInterfaces.includes(adapter)) {
-        throw new Error(`TAP adapter "${adapter}" is not visible to Windows. Install the ARM64 TAP-Windows driver and enter its exact adapter name.`);
+      if (!knownInterfaces.includes(adapter) || !/tap|openvpn/i.test(adapter)) {
+        throw new Error(`TAP adapter "${adapter}" is not visible to Windows. Install the ARM64 TAP-Windows NDIS 6.30 driver and select its exact adapter name.`);
       }
-      return ['-netdev', `tap,id=labnet,ifname=${adapter}`, '-device', `e1000,netdev=labnet,mac=${mac}`];
+      return ['-netdev', `tap,id=labnet,ifname=${adapter},script=no,downscript=no`, '-device', `e1000,netdev=labnet,mac=${mac}`];
     }
-    throw new Error('Bridged TAP networking is not configured for this host platform.');
+    throw new Error('Bridged networking is not configured for this host platform.');
   }
 
   const rules = validatePortForwards(machine.portForwards ?? defaultPortForwards());
@@ -736,6 +757,23 @@ function buildNetworkArguments(machine: MachineRecord): string[] {
     ...forwardArgs
   ].join(',');
   return ['-netdev', backend, '-device', `e1000,netdev=labnet,mac=${mac}`];
+}
+
+async function resolveBridgedLauncher(machine: MachineRecord, qemuExecutable: string): Promise<{ executable: string; prefixArgs: string[] }> {
+  if ((machine.networkMode ?? 'nat') !== 'bridged' || process.platform !== 'darwin') {
+    return { executable: qemuExecutable, prefixArgs: [] };
+  }
+
+  const adapter = (machine.networkAdapter ?? '').trim();
+  const client = await resolveCommand('socket_vmnet_client');
+  if (!client) {
+    throw new Error('macOS bridged networking requires socket_vmnet. Install it with "brew install socket_vmnet", then configure its bridged LaunchDaemon for the selected interface. See the macOS Bridged setup guide.');
+  }
+  const socketPath = socketVmnetSocketCandidates(adapter).find((candidate) => existsSync(candidate));
+  if (!socketPath) {
+    throw new Error(`No socket_vmnet bridge is running for ${adapter}. Configure and start the socket_vmnet LaunchDaemon for ${adapter}; expected socket: ${socketVmnetSocketCandidates(adapter)[0]}.`);
+  }
+  return { executable: client, prefixArgs: [socketPath, qemuExecutable] };
 }
 
 async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryMiB: number) {
@@ -766,7 +804,11 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   log(`QEMU disk: ${machine.diskPath}`);
   const qemuExecutable = await resolveCommand(qemuBinary(architecture));
   if (!qemuExecutable) throw new Error(`${qemuBinary(architecture)} was not found. Install QEMU and restart the app.`);
-  const child = spawn(qemuExecutable, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: qemuRuntimeEnvironment() });
+  const launcher = await resolveBridgedLauncher(machine, qemuExecutable);
+  const child = spawn(launcher.executable, [...launcher.prefixArgs, ...qemuArgs], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: qemuRuntimeEnvironment()
+  });
   targetProcess = child;
   activeMachineId = id;
   child.stdout?.on('data', (chunk: Buffer) => log(`QEMU: ${chunk.toString().trim()}`));
