@@ -269,6 +269,24 @@ function socketVmnetSocketCandidates(adapter: string): string[] {
   ];
 }
 
+async function discoverWindowsTapAdapters(): Promise<string[]> {
+  if (process.platform !== 'win32') return [];
+  const powershell = await resolveCommand('powershell.exe');
+  if (!powershell) return [];
+  try {
+    const command = "Get-NetAdapter -IncludeHidden | Where-Object { $_.InterfaceDescription -match 'TAP-Windows|OpenVPN TAP' } | Select-Object -ExpandProperty Name";
+    const result = await execFileAsync(powershell, ['-NoProfile', '-NonInteractive', '-Command', command], {
+      encoding: 'utf8',
+      timeout: 5000,
+      maxBuffer: 1024 * 1024
+    });
+    return [...new Set(result.stdout.split(/\\r?\\n/).map((value) => value.trim()).filter(Boolean))];
+  } catch (error) {
+    log(`Windows TAP adapter discovery warning: ${String(error)}`);
+    return [];
+  }
+}
+
 async function getHostNetworkInfo() {
   const interfaces = os.networkInterfaces();
   const hostIPv4Addresses = [...new Set(Object.values(interfaces).flatMap((items) =>
@@ -282,7 +300,7 @@ async function getHostNetworkInfo() {
     // requiring the QEMU process itself to run as root.
     bridgeAdapters = networkInterfaceNames.filter((name) => /^en\\d+$/.test(name)).sort();
   } else if (process.platform === 'win32') {
-    tapDevices = networkInterfaceNames.filter((name) => /tap|openvpn/i.test(name));
+    tapDevices = await discoverWindowsTapAdapters();
     bridgeAdapters = tapDevices;
   }
   const vmnetSocketClientAvailable = process.platform === 'darwin'
@@ -736,9 +754,9 @@ function buildNetworkArguments(machine: MachineRecord): string[] {
       return ['-netdev', 'socket,id=labnet,fd=3', '-device', `e1000,netdev=labnet,mac=${mac}`];
     }
     if (process.platform === 'win32') {
-      const knownInterfaces = Object.keys(os.networkInterfaces());
-      if (!knownInterfaces.includes(adapter) || !/tap|openvpn/i.test(adapter)) {
-        throw new Error(`TAP adapter "${adapter}" is not visible to Windows. Install the ARM64 TAP-Windows NDIS 6.30 driver and select its exact adapter name.`);
+      const knownTapAdapters = await discoverWindowsTapAdapters();
+      if (!knownTapAdapters.includes(adapter)) {
+        throw new Error(`TAP adapter "${adapter}" was not found by Windows. Install the ARM64 TAP-Windows NDIS 6.30 driver, then select its adapter name from the detected list.`);
       }
       return ['-netdev', `tap,id=labnet,ifname=${adapter},script=no,downscript=no`, '-device', `e1000,netdev=labnet,mac=${mac}`];
     }
