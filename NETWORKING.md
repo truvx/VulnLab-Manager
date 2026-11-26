@@ -1,58 +1,86 @@
-# Generic isolated network setup
+# QEMU target networking
 
-VulnLab Manager starts and stops **only the selected QEMU target**. It does not start, stop, configure, or require Kali, Parrot, VirtualBox, or another attacker VM. You choose and manage the attacker environment manually.
+VulnLab Manager configures networking independently for each imported machine. The application starts and stops **only its selected QEMU target**. It does not start, stop, or reconfigure Kali, Parrot, VirtualBox, or another attacker VM.
 
-## Host-side QEMU endpoint
+Choose **NAT** for the simplest cross-platform setup, or **Bridged (TAP)** when the host has a TAP adapter connected to the same isolated Layer-2 segment as the attacker VM.
 
-The target's E1000 NIC uses a localhost UDP datagram backend:
+## NAT (recommended for most hosts)
 
-- QEMU local UDP endpoint: `127.0.0.1:10002`
-- QEMU remote UDP endpoint: `127.0.0.1:10001`
+NAT uses QEMU's built-in user-mode network stack. It works without administrator privileges or a separate host network driver. The QEMU guest receives DHCP configuration on 10.77.0.0/24; the expected guest address is 10.77.0.15.
 
-## VirtualBox attacker VM adapter
+QEMU user-mode networking blocks unsolicited inbound traffic. VulnLab Manager therefore configures explicit host-forwarding rules for the selected machine. The defaults are:
 
-Power off the attacker VM before changing adapter settings. Configure its second adapter:
+| Protocol | Host port | Guest port | Service |
+|---|---:|---:|---|
+| TCP | 2222 | 22 | SSH |
+| TCP | 8080 | 80 | HTTP |
+| TCP | 8443 | 443 | HTTPS |
+| TCP | 1445 | 445 | SMB |
+| TCP | 13306 | 3306 | MySQL |
 
-1. Enable Adapter 2 and select **Generic Driver**.
-2. Choose **UDP Tunnel**.
-3. Destination address: `127.0.0.1`.
-4. Source port: `10001`.
-5. Destination port: `10002`.
-6. Enable **Cable Connected**.
+You can edit, add, or remove TCP/UDP rules under **Machine configuration → Network mode → NAT**. Host ports must be 1024–65535; guest ports may be 1–65535.
 
-Do not change Adapter 1 if it provides internet access. Other hypervisors must provide an equivalent isolated UDP/Ethernet endpoint; this release does not configure them automatically.
+### Attacking a NAT-mode target from Kali or Parrot
 
-## Guest IP configuration
+1. Start the attacker VM manually.
+2. Start the QEMU target from VulnLab Manager with NAT selected.
+3. In the app, note one of the **Host IPv4 addresses** listed in the network settings.
+4. From the attacker VM, scan the forwarded host ports, for example:
 
-The UDP tunnel carries Ethernet frames; it does not assign IP addresses. The attacker and target need addresses in the same isolated subnet. For this release, the included Linux helper defaults to `192.168.77.0/24` and configures the selected attacker-side interface as `192.168.77.1/24`. It offers DHCP addresses from `192.168.77.10` to `192.168.77.200`. The vulnerable target must be configured for DHCP or assigned a static address in that same subnet.
+   ```bash
+   nmap -sV -Pn -p 2222,8080,8443,1445,13306 <HOST-IP>
+   ```
 
-### Optional generic Linux helper
+5. Connect to a forwarded service using the host address and host-side port. For example, browse to http://<HOST-IP>:8080 for the guest's port 80 service.
 
-Copy `lab-network-setup.sh` manually from the project ZIP into the attacker VM (for example, `/root/lab-network-setup.sh` or the user home directory). Then run it from that location:
+NAT is not a transparent Layer-2 network. The attacker VM cannot ARP-scan the guest's private 10.77.0.0/24 address or scan ports that have not been forwarded. Add a forwarding rule for each service you need to reach. A guest using a manually configured static IP rather than DHCP must be changed to use the QEMU NAT subnet/address expected by the rules, or use Bridged mode instead.
 
-```bash
-sudo bash /root/lab-network-setup.sh
-```
+**Exposure warning:** forwarded ports bind to all host interfaces so the attacker VM can reach them. A host firewall may need to allow those host-side ports. Keep the target on a trusted, isolated environment, remove unused forwards, and do not expose deliberately vulnerable services to an untrusted LAN or the internet.
 
-The script lists detected interfaces and asks you to choose the isolated lab adapter. You can also copy it to your home directory and run `sudo bash ~/lab-network-setup.sh`. You can also specify it explicitly:
+## Bridged (TAP)
 
-```bash
-sudo bash lab-network-setup.sh enp0s8
-```
+Bridged mode connects the QEMU E1000 NIC to a host TAP adapter using QEMU's tap backend. The target gets its address from the DHCP server on the Layer-2 network to which that TAP device is connected. This allows full network-level interaction (including ARP discovery and port scans) when the attacker VM is attached to the same segment.
 
-It refuses to configure the system's default-route interface. It supports NetworkManager for a persistent address profile and uses dnsmasq for DHCP. It can install dnsmasq using apt, dnf, pacman, or zypper. On systems without NetworkManager, the IP address is applied for the current session only. The script requires a systemd service manager for persistent DHCP startup; otherwise it starts DHCP for the current session. Review the script before running it, and do not run it on a public or internet-facing interface.
+This mode requires a TAP device/driver and host-side Layer-2 connectivity. VulnLab Manager deliberately does not install kernel drivers, elevate privileges, create host bridges, or change host network interfaces automatically.
 
-The helper is optional. You can configure static IP addresses manually or use another DHCP server, provided it is bound only to the isolated lab network. Avoid running multiple DHCP servers on the same isolated segment.
+### macOS Apple Silicon
 
-## Normal workflow
+- Install and configure a macOS TAP driver that provides a device such as /dev/tap0.
+- Enter the device name (for example, tap0) in the machine's Bridged network settings.
+- Connect that TAP interface to an isolated Layer-2 segment shared with the attacker VM before starting the target.
+- If using VirtualBox, configure the attacker adapter to the same isolated network segment.
 
-1. Start your preferred attacker VM manually.
-2. Configure its isolated adapter for the UDP tunnel above.
-3. Run the generic network helper or configure guest networking manually.
-4. Start the selected vulnerable target from VulnLab Manager.
-5. Verify both guests are on the same subnet and can reach each other.
-6. Stop the target from the app. The attacker VM remains under your control.
+The QEMU vmnet backend is not assumed by this application: Apple's com.apple.vm.networking entitlement is restricted and must be requested from Apple. This build uses a user-provided TAP device for bridged networking instead.
 
-## Scope and limitations
+### Windows 11 ARM64
 
-The current QEMU launcher supports one x86/i386 target at a time and uses a BIOS/IDE/E1000 compatibility profile. Some images require UEFI, SCSI/SATA/NVMe, VirtIO, or other device profiles that are not yet auto-detected. Hosted platforms may not permit exporting VM images; only import files you are authorized to use.
+- Install an ARM64-compatible TAP-Windows NDIS 6 driver. The OpenVPN tap-windows6 project includes ARM64 driver source/package support; the driver is not bundled with VulnLab Manager.
+- Find the adapter's exact Windows interface name (for example, with PowerShell Get-NetAdapter) and enter that name in the machine's Bridged network settings.
+- Connect the TAP adapter and your attacker VM to the same isolated Layer-2 segment using Windows networking/VirtualBox configuration.
+- Start the QEMU target and let the segment's DHCP server assign an address.
+
+Driver installation and creation of Windows Network Bridges require administrator approval and are intentionally left to the user.
+
+### Security
+
+Bridged mode places the vulnerable guest on the chosen Layer-2 network. Do not bridge intentionally vulnerable machines to a public Wi-Fi network, trusted home/work LAN, or any segment containing devices you do not intend to test. Use a dedicated isolated network or lab VLAN.
+
+## IP address display
+
+- NAT mode displays the QEMU DHCP address expected by the built-in user network (10.77.0.15) while the target is running.
+- Bridged mode attempts to resolve the guest's configured virtual MAC address from the host ARP table. It may show **waiting for DHCP/ARP** until the guest has requested an address or exchanged traffic.
+- The host IPv4 addresses displayed in the NAT settings are the addresses the attacker VM should use to reach forwarded host ports. They are not the guest's NAT IP.
+
+## Network setup helper
+
+The optional lab-network-setup.sh remains available for manually configuring a Linux attacker VM's selected isolated interface and DHCP service. Copy it into the attacker VM and run it yourself. It is not required for QEMU NAT, and it must not be run on the host's internet-facing interface. For NAT mode the QEMU user network supplies guest-side DHCP; do not run an additional DHCP server on that same guest network.
+
+## Troubleshooting
+
+- **NAT guest has no address:** confirm the guest is set to obtain IPv4 by DHCP and restart it.
+- **Kali cannot reach a forwarded port:** use one of the host IPv4 addresses shown in the app; verify that the host OS firewall permits the host-side port; verify that the selected host port is forwarded to the service's actual guest port.
+- **Port-forward collision:** choose a different host port in Machine configuration. Guest service ports do not need to change.
+- **Bridged target has no IP:** verify the TAP driver/device is installed, the TAP adapter is connected to the same isolated Layer-2 network as the attacker, and DHCP is available on that segment.
+- **Bridged mode fails at launch:** confirm the TAP adapter name exactly matches the host device name and that the current user has permission to open it.
+
+QEMU network backend references: https://www.qemu.org/docs/master/system/devices/net.html and https://www.qemu.org/docs/master/system/qemu-manpage.html#network-options.
