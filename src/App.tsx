@@ -149,12 +149,18 @@ export default function App() {
 
       {notice && <div className={`notice ${notice.type}`}><span>{notice.type === 'error' ? '⚠' : notice.type === 'success' ? '✓' : 'i'}</span>{notice.text}<button onClick={() => setNotice(null)}>×</button></div>}
 
-      <section className={`drop-zone ${dragging ? 'dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
-        <div className="drop-icon">⇧</div>
-        <div className="drop-copy"><h2>Drop a VM package or disk image here</h2><p>ZIP/OVA/TAR, OVF/VBOX folders and VMDK/QCOW/VDI/VHDX/IMG/RAW · Any source</p></div>
-        <button className="secondary-button" onClick={() => void chooseArchive()} disabled={busy}>Browse files</button>
-        {busy && <div className="drop-progress"><span/></div>}
-      </section>
+      <div className="import-activity-grid">
+        <section className={`drop-zone ${dragging ? 'dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
+          <div className="drop-icon">⇧</div>
+          <div className="drop-copy"><h2>Drop a VM package or disk image here</h2><p>ZIP/OVA/TAR, OVF/VBOX folders and VMDK/QCOW/VDI/VHDX/IMG/RAW · Any source</p></div>
+          <button className="secondary-button" onClick={() => void chooseArchive()} disabled={busy}>Browse files</button>
+          {busy && <div className="drop-progress"><span/></div>}
+        </section>
+        <section className="panel logs-panel logs-panel-compact">
+          <div className="panel-heading"><div><h2>Activity</h2><p>Recent importer and QEMU events</p></div><button className="text-button" onClick={() => setLogs([])}>Clear</button></div>
+          <div className="log-view">{logs.length ? logs.slice(-6).map((line, index) => <div key={`${index}-${line}`}><span>{line.slice(0, 10)}</span>{line.slice(11)}</div>) : <span className="log-placeholder">No activity yet. Import an archive to begin.</span>}</div>
+        </section>
+      </div>
 
       <div className="content-grid">
         <section className="panel machine-panel">
@@ -247,13 +253,29 @@ export default function App() {
         </section>
       </div>
 
-      <section className="panel network-panel">
-        <div className="panel-heading"><div><h2>Attacker connectivity</h2><p>Use NAT port forwards or a shared TAP-backed Ethernet segment</p></div><span className="network-badge"><span className="dot amber"/>Attacker VM remains manual</span></div>
-        <div className="network-flow"><div className="network-node"><div className="node-icon">⌘</div><div><strong>Attacker VM</strong><span>Kali, Parrot OS, or another compatible VM</span></div></div><div className="tunnel"><div className="tunnel-line"/><span>{networkMode === 'nat' ? 'NAT · forwarded service ports' : 'TAP · Layer-2 Ethernet'}</span></div><div className="network-node"><div className="node-icon target">▣</div><div><strong>{selectedMachine?.name ?? 'QEMU target'}</strong><span>{selectedMachine?.ipAddress ?? (selectedMachine?.status === 'running' ? 'IP discovery pending' : 'Target stopped')}</span></div></div></div>
-        <div className="network-actions"><button className="secondary-button" disabled={busy} onClick={() => void runAction(() => window.lab.openNetworkSetupFiles(), 'Opened the network setup files.')}>Network setup files</button><div className="network-hint">VulnLab Manager starts only its QEMU target. It never starts or reconfigures Kali/Parrot. NAT exposes only the ports you forward; bridged TAP requires a host TAP driver and a shared isolated network segment.</div></div>
+      <section className="panel traffic-panel">
+        <div className="panel-heading">
+          <div><h2>Live network activity</h2><p>{selectedMachine ? selectedMachine.name : 'Select a target'} · QEMU NIC packet telemetry</p></div>
+          <span className={state?.activeMachineId === selectedMachine?.id && selectedMachine ? 'traffic-state active' : 'traffic-state'}>{state?.activeMachineId === selectedMachine?.id && selectedMachine ? 'MONITORING' : state?.trafficMachineId === selectedMachine?.id && selectedMachine ? 'LAST RUN' : 'IDLE'}</span>
+        </div>
+        {selectedMachine && state?.trafficMachineId === selectedMachine.id ? <>
+          <div className="traffic-metrics">
+            <div><span>Received</span><strong>{state.trafficStats.rxPackets.toLocaleString()}</strong><small>{state.trafficStats.rxBytes.toLocaleString()} bytes</small></div>
+            <div><span>Sent</span><strong>{state.trafficStats.txPackets.toLocaleString()}</strong><small>{state.trafficStats.txBytes.toLocaleString()} bytes</small></div>
+            <div><span>Peer IPs</span><strong>{state.trafficStats.peerAddresses.length}</strong><small>{state.trafficStats.captureAvailable ? 'Ethernet headers observed' : 'Waiting for packets'}</small></div>
+            <div><span>Last activity</span><strong className="traffic-last">{state.trafficStats.lastActivityAt ? new Date(state.trafficStats.lastActivityAt).toLocaleTimeString() : '—'}</strong><small>{state.trafficStats.captureAvailable ? 'Capture active or complete' : 'No frames captured yet'}</small></div>
+          </div>
+          <div className="traffic-peers"><strong>Observed peers</strong><span>{state.trafficStats.peerAddresses.length ? state.trafficStats.peerAddresses.join(' · ') : 'No peer IP addresses observed yet. Run a scan or connect to a service from your attacker VM.'}</span></div>
+        </> : <div className="traffic-empty">{selectedMachine ? 'Start this target to monitor packets entering and leaving its virtual NIC.' : 'Select an imported target to view its network activity.'}</div>}
+        <p className="traffic-footnote">Header-only telemetry (up to 54 bytes per frame). Application payloads are not captured; the temporary capture is deleted when the target stops.</p>
       </section>
 
-      <section className="panel logs-panel"><div className="panel-heading"><div><h2>Activity</h2><p>Recent importer and QEMU events</p></div><button className="text-button" onClick={() => setLogs([])}>Clear</button></div><div className="log-view">{logs.length ? logs.slice(-8).map((line, index) => <div key={`${index}-${line}`}><span>{line.slice(0, 10)}</span>{line.slice(11)}</div>) : <span className="log-placeholder">No activity yet. Import an archive to begin.</span>}</div></section>
+      <section className="panel network-panel">
+        <div className="panel-heading"><div><h2>Attacker connectivity</h2><p>Use NAT port forwards or a shared bridged Layer-2 network</p></div><span className="network-badge"><span className="dot amber"/>Attacker VM remains manual</span></div>
+        <div className="network-flow"><div className="network-node"><div className="node-icon">⌘</div><div><strong>Attacker VM</strong><span>Kali, Parrot OS, or another compatible VM</span></div></div><div className="tunnel"><div className="tunnel-line"/><span>{networkMode === 'nat' ? 'NAT · forwarded service ports' : 'Bridged · Layer-2 Ethernet'}</span></div><div className="network-node"><div className="node-icon target">▣</div><div><strong>{selectedMachine?.name ?? 'QEMU target'}</strong><span>{selectedMachine?.ipAddress ?? (selectedMachine?.status === 'running' ? 'IP discovery pending' : 'Target stopped')}</span></div></div></div>
+        <div className="network-actions"><button className="secondary-button" disabled={busy} onClick={() => void runAction(() => window.lab.openNetworkSetupFiles(), 'Opened the network setup files.')}>Network setup files</button><div className="network-hint">VulnLab Manager starts only its QEMU target. It never starts or reconfigures Kali/Parrot. NAT exposes only the ports you forward; macOS bridged mode requires socket_vmnet; Windows bridged mode requires the ARM64 TAP-Windows driver and a shared isolated network segment.</div></div>
+      </section>
+
       <footer>VulnLab Manager · General-purpose local VM orchestration · Imported machine images are untrusted; inspect before booting.</footer>
     </main>
   </div>;
