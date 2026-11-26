@@ -72,6 +72,7 @@ function emptyTrafficStats(): NetworkTrafficStats {
     rxBytes: 0,
     txBytes: 0,
     lastActivityAt: null,
+    guestIpAddress: null,
     peerAddresses: []
   };
 }
@@ -857,10 +858,18 @@ function addTrafficPacket(packet: Buffer, originalLength: number, guestMac: stri
   const etherType = packet.readUInt16BE(12);
   if (etherType === 0x0800 && packet.length >= 34) {
     peer = outgoing ? bytesToIPv4(packet, 30) : bytesToIPv4(packet, 26);
+    if (outgoing) {
+      const guestAddress = bytesToIPv4(packet, 26);
+      if (guestAddress !== '0.0.0.0') trafficStats.guestIpAddress = guestAddress;
+    }
   } else if (etherType === 0x86dd && packet.length >= 54) {
     peer = outgoing ? bytesToIPv6(packet, 38) : bytesToIPv6(packet, 22);
   } else if (etherType === 0x0806 && packet.length >= 42) {
     peer = outgoing ? bytesToIPv4(packet, 38) : bytesToIPv4(packet, 28);
+    if (outgoing) {
+      const guestAddress = bytesToIPv4(packet, 28);
+      if (guestAddress !== '0.0.0.0') trafficStats.guestIpAddress = guestAddress;
+    }
   }
 
   if (peer && peer !== '0.0.0.0' && peer !== '255.255.255.255' && peer !== '::') {
@@ -1073,7 +1082,8 @@ app.whenReady().then(async () => {
       if (machine.id === activeMachineId) {
         ipAddress = (machine.networkMode ?? 'nat') === 'nat'
           ? NAT_GUEST_IP
-          : await resolveGuestIpByMac(machine.macAddress || machineMac(machine.id));
+          : (trafficMachineId === machine.id ? trafficStats.guestIpAddress : null)
+            ?? await resolveGuestIpByMac(machine.macAddress || machineMac(machine.id));
       }
       return { ...machine, ipAddress };
     }));
