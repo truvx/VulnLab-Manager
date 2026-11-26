@@ -3,7 +3,7 @@
   <h1>VulnLab Manager</h1>
   <p><strong>A local-first vulnerable machine library and QEMU target manager.</strong></p>
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.5.0-6477f5" />
+    <img alt="Version" src="https://img.shields.io/badge/version-0.6.0-6477f5" />
     <a href="https://github.com/truvx/VulnLab-Manager/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/truvx/VulnLab-Manager/actions/workflows/ci.yml/badge.svg" /></a>
     <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon-111111?logo=apple" />
     <img alt="Windows" src="https://img.shields.io/badge/Windows-ARM64-0078D4?logo=windows" />
