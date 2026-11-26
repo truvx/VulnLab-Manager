@@ -1,6 +1,6 @@
 # Bundled QEMU runtime
 
-VulnLab Manager v0.5.0 is being prepared to package a private QEMU runtime with each supported ARM64 installer. The host-side QEMU executable is native to the host; its x86/i386 guest emulator is QEMU TCG. The native packaging jobs must pass before this runtime can be considered released.
+VulnLab Manager v0.6.0 is being prepared to package a private QEMU runtime with each supported ARM64 installer. The host-side QEMU executable is native to the host; its x86/i386 guest emulator is QEMU TCG. The native packaging jobs must pass before this runtime can be considered released.
 
 ## Runtime layout
 
