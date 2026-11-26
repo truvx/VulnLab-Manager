@@ -928,7 +928,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
     '-drive', `file=${qemuDiskPath},format=qcow2,if=ide,index=0`,
     '-boot', 'order=c,menu=on',
     ...await buildNetworkArguments(machine),
-    '-object', `filter-dump,id=networktrace,netdev=labnet,file=${capturePath.replace(/\\\\/g, '/')},maxlen=54`,
+    '-object', `filter-dump,id=networktrace,netdev=labnet,file=${capturePath.replace(/\\/g, '/')},maxlen=54`,
     '-display', process.platform === 'darwin' ? 'cocoa' : process.platform === 'win32' ? 'sdl' : 'gtk',
     '-monitor', 'none', '-serial', 'none', '-parallel', 'none'
   ];
