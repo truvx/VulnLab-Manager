@@ -57,6 +57,15 @@ function Get-ImportedDlls([string]$File) {
 function Resolve-RuntimeDll([string]$Name) {
   $candidate = Join-Path $MingwBin $Name
   if (Test-Path $candidate) { return $candidate }
+
+  # MSYS2's CLANGARM64 rav1e import library requests rav1e.dll, while the
+  # matching runtime package installs the same ARM64 implementation as
+  # librav1e.dll. Stage it under the PE import name expected by dependants.
+  if ($Name -ieq 'rav1e.dll') {
+    $rav1eCandidate = Join-Path $MingwBin 'librav1e.dll'
+    if (Test-Path $rav1eCandidate) { return $rav1eCandidate }
+  }
+
   if (Test-Path (Join-Path $SystemDir $Name)) { return $null }
   $lower = $Name.ToLowerInvariant()
   if ($lower.StartsWith('api-ms-win-') -or $lower.StartsWith('ext-ms-win-')) { return $null }
