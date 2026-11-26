@@ -987,7 +987,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   child.on('exit', (code, signal) => {
     const exitedId = activeMachineId;
     log(`QEMU exited (code=${code ?? 'none'}, signal=${signal ?? 'none'}).`);
-    void finishTrafficCapture();
+    trafficCleanupPromise = finishTrafficCapture();
     targetProcess = null;
     activeMachineId = null;
     if (exitedId) void readMachines().then((items) => writeMachines(items.map((item) => item.id === exitedId ? { ...item, status: 'stopped' as const } : item)));
