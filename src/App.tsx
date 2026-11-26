@@ -212,16 +212,22 @@ export default function App() {
                 </div>
                 <p className="network-warning">Forwarded ports bind to all host interfaces so a VM can reach them. Keep this target on a trusted, isolated network and remove forwards you do not need.</p>
               </> : <>
-                <label className="field-label" htmlFor="tap-adapter">Host TAP adapter</label>
-                <input id="tap-adapter" className="network-adapter-input" list="tap-adapter-options" value={networkAdapter} onChange={(event) => { setNetworkAdapter(event.target.value); setNetworkDirty(true); }} placeholder={system?.platform === 'darwin' ? 'tap0' : 'TAP-Windows Adapter V9'}/>
-                <datalist id="tap-adapter-options">
-                  {(system?.tapDevices ?? []).map((name) => <option key={name} value={name}/>)}
+                <label className="field-label" htmlFor="tap-adapter">{system?.platform === 'darwin' ? 'Host network interface' : 'TAP adapter'}</label>
+                <input id="tap-adapter" className="network-adapter-input" list="bridge-adapter-options" value={networkAdapter} onChange={(event) => { setNetworkAdapter(event.target.value); setNetworkDirty(true); }} placeholder={system?.platform === 'darwin' ? 'en0' : 'TAP-Windows Adapter V9'}/>
+                <datalist id="bridge-adapter-options">
+                  {(system?.bridgeAdapters ?? []).map((name) => <option key={name} value={name}/>)}
                 </datalist>
                 <div className="network-help">
-                  <strong>Layer-2 bridge through a host TAP device</strong>
-                  <span>{system?.platform === 'darwin' ? 'Requires a macOS TAP driver and an existing /dev/tapN device. QEMU vmnet is not assumed because it requires Apple VM-networking entitlement/privileged setup.' : system?.platform === 'win32' ? 'Requires an installed ARM64 TAP-Windows driver (for example from OpenVPN). Enter the exact adapter name recognized by QEMU.' : 'Requires a configured TAP device on this host.'}</span>
-                  <span>Detected TAP devices: {system?.tapDevices?.length ? system.tapDevices.join(', ') : 'none detected'}.</span>
-                  <span>Attach the TAP device to the same isolated Ethernet segment as your attacker VM using host networking settings. Set VirtualBox Adapter 2 to Bridged on that same segment. Do not bridge an intentionally vulnerable target onto a public or trusted home/work LAN.</span>
+                  <strong>{system?.platform === 'darwin' ? 'Layer-2 bridge via Apple vmnet + socket_vmnet' : 'Layer-2 bridge via Windows TAP'}</strong>
+                  {system?.platform === 'darwin' ? <>
+                    <span>Choose a physical interface such as en0. socket_vmnet_client: {system?.vmnetSocketClientAvailable ? 'detected' : 'not installed'}.</span>
+                    <span>Active bridged vmnet sockets: {system?.vmnetBridgedSockets?.length ? system.vmnetBridgedSockets.join(', ') : 'none detected'}.</span>
+                    <span>Install with brew install socket_vmnet, then configure the socket_vmnet bridged LaunchDaemon for this interface. The app runs QEMU unprivileged through the helper; it does not install or launch root services.</span>
+                  </> : <>
+                    <span>Requires an ARM64-compatible TAP-Windows NDIS 6.30 driver (for example, the OpenVPN tap-windows6 driver). Enter the exact adapter name recognized by Windows.</span>
+                    <span>Detected TAP adapters: {system?.tapDevices?.length ? system.tapDevices.join(', ') : 'none detected'}.</span>
+                  </>}
+                  <span>Connect the selected host interface and your attacker VM to the same isolated Layer-2 segment. Set VirtualBox Adapter 2 to Bridged on that same segment. Never bridge a deliberately vulnerable guest onto a public or trusted home/work LAN.</span>
                 </div>
               </>}
               <button className="secondary-button full save-network" disabled={busy || !networkDirty || (networkMode === 'bridged' && !networkAdapter.trim())} onClick={() => void saveNetworkSettings()}>
