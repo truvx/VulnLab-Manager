@@ -37,6 +37,7 @@ export interface NetworkTrafficStats {
   rxBytes: number;
   txBytes: number;
   lastActivityAt: string | null;
+  guestIpAddress: string | null;
   peerAddresses: string[];
 }
 
