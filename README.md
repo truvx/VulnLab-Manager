@@ -38,7 +38,7 @@ Release assets include a `SHA256SUMS.txt` file. Compare the checksum before inst
 - **QEMU target execution** — x86_64 and i386 guest emulation using TCG software translation.
 - **Disposable write overlays** — QEMU writes to a per-run QCOW2 overlay so the imported base image remains unchanged.
 - **Manual attacker workflow** — attacker VMs are intentionally outside the application's lifecycle control.
-- **Isolated UDP networking option** — a QEMU datagram endpoint can be paired with a compatible hypervisor UDP tunnel.
+- **Per-machine networking** — QEMU user-mode NAT with editable TCP/UDP host forwards, plus bridged TAP mode when a host TAP device is installed and connected to the attacker VM's isolated Layer-2 network.
 - **Generic Linux network helper** — included for manual use inside a selected Linux attacker VM; it is never automatically copied or executed.
 - **Cross-platform desktop packaging** — macOS Apple Silicon and Windows ARM64 installers.
 
@@ -79,7 +79,7 @@ For OVF/VirtualBox descriptors, select the descriptor or containing folder. When
 2. Open the app and import a local VM package, VM folder, or disk image.
 3. Select a machine, choose guest architecture and memory, then select **Start target**.
 4. Start your preferred attacker VM manually.
-5. Optionally configure an isolated UDP tunnel as described in [Network setup](docs/NETWORKING.md). Keep the attacker VM's normal internet adapter separate from the lab adapter.
+5. Choose the target's network mode in Machine configuration. NAT is the cross-platform default; use the displayed host IPv4 and forwarded host ports from Kali/Parrot. Bridged TAP provides Layer-2 access when a host TAP driver/interface is installed and connected to the same isolated segment as your attacker VM.
 6. Use **Stop target** when finished.
 
 See [Installation](docs/INSTALLATION.md), [Bundled QEMU runtime](docs/QEMU_RUNTIME.md), [Networking](docs/NETWORKING.md), and [Architecture](docs/ARCHITECTURE.md) for details.
