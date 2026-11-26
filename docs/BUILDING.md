@@ -13,7 +13,7 @@ The normal development build (`npm run build`) does not require QEMU. The applic
 Both platform release runtimes are pinned to QEMU **11.1.3**:
 
 - macOS Apple Silicon: Homebrew `qemu` formula; the bundler follows the actual dylib links of the QEMU tools and modules with `otool`.
-- Windows ARM64: MSYS2 CLANGARM64 packages `mingw-w64-clang-aarch64-qemu 11.1.3-2` and `mingw-w64-clang-aarch64-qemu-image-util 11.1.3-2`.
+- Windows ARM64: MSYS2 CLANGARM64 packages `mingw-w64-clang-aarch64-qemu 11.1.3-2`, `mingw-w64-clang-aarch64-qemu-image-util 11.1.3-2`, and `mingw-w64-clang-aarch64-rav1e`.
 
 The Windows runtime uses native ARM64 binaries, not x64 binaries running under Windows emulation. MSYS2 documents CLANGARM64 as its AArch64 environment; QEMU documents that Windows ARM64 builds should use CLANGARM64. See [MSYS2 ARM64 support](https://www.msys2.org/docs/arm64/) and [QEMU build environment](https://www.qemu.org/docs/master/devel/build-environment.html).
 
@@ -37,13 +37,14 @@ Requirements: a native Windows ARM64 host and MSYS2 CLANGARM64 with these packag
 - `binutils`
 - `mingw-w64-clang-aarch64-qemu`
 - `mingw-w64-clang-aarch64-qemu-image-util`
+- `mingw-w64-clang-aarch64-rav1e`
 
 ```powershell
 npm ci
 npm run package:win:arm64
 ```
 
-The PowerShell staging script copies the QEMU system emulators, `qemu-img` and firmware/data, then resolves their transitive runtime DLL dependencies into `runtime/qemu` using the native CLANGARM64 `llvm-objdump`. Optional QEMU instrumentation/test plugins are excluded. It checks the architecture and QEMU version and smoke-tests all three bundled tools before packaging. The output is an NSIS `.exe` installer under `release/`.
+The PowerShell staging script copies the QEMU system emulators, `qemu-img` and firmware/data, then resolves their transitive runtime DLL dependencies into `runtime/qemu` using the native CLANGARM64 `llvm-objdump`. It includes the CLANGARM64 rav1e runtime and stages `librav1e.dll` under the `rav1e.dll` import name where required. Optional QEMU instrumentation/test plugins are excluded. It checks the architecture and QEMU version and smoke-tests all three bundled tools before packaging. The output is an NSIS `.exe` installer under `release/`.
 
 You can also run `Build-Windows-ARM64.ps1` from PowerShell.
 
