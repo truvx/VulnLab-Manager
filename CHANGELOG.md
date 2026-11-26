@@ -8,6 +8,8 @@
 - Added host IPv4 address discovery to show how attacker VMs can reach NAT-forwarded services.
 - Added TAP driver/interface prerequisites and isolation warnings for bridged mode.
 - Replaced the previous localhost UDP tunnel as the default QEMU network backend.
+- Added per-target QEMU NIC traffic telemetry (packet/byte counters and observed peer IPs) using short packet-prefix captures that are deleted when the target stops.
+- Moved the Activity panel beside the compact import drop zone.
 - Updated network setup documentation for Kali, Parrot, and other manually managed attacker VMs.
 
 ## 0.5.0 — Bundled QEMU runtime (in validation)
