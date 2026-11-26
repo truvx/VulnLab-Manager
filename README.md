@@ -38,7 +38,7 @@ Release assets include a `SHA256SUMS.txt` file. Compare the checksum before inst
 - **QEMU target execution** — x86_64 and i386 guest emulation using TCG software translation.
 - **Disposable write overlays** — QEMU writes to a per-run QCOW2 overlay so the imported base image remains unchanged.
 - **Manual attacker workflow** — attacker VMs are intentionally outside the application's lifecycle control.
-- **Per-machine networking** — QEMU user-mode NAT with editable TCP/UDP host forwards, plus bridged TAP mode when a host TAP device is installed and connected to the attacker VM's isolated Layer-2 network.
+- **Per-machine networking** — QEMU user-mode NAT with editable TCP/UDP host forwards, plus bridged Layer-2 networking (macOS socket_vmnet or Windows ARM64 TAP-Windows) when connected to the same isolated segment as the attacker VM.
 - **Generic Linux network helper** — included for manual use inside a selected Linux attacker VM; it is never automatically copied or executed.
 - **Cross-platform desktop packaging** — macOS Apple Silicon and Windows ARM64 installers.
 
@@ -56,7 +56,7 @@ The launch profile is intentionally conservative. Images requiring UEFI, VirtIO/
 
 ### Bundled QEMU engine
 
-The v0.5.0 packaging pipeline is configured to include a host-native QEMU 11.1.3 runtime, firmware/data files, and the runtime libraries needed by the bundled tools. Native release builds are still being validated.
+The v0.6.0 development packaging pipeline is configured to include a host-native QEMU 11.1.3 runtime, firmware/data files, and the runtime libraries needed by the bundled tools. Native release builds are still being validated.
 
 - **macOS Apple Silicon:** native ARM64 QEMU runtime staged from the Homebrew QEMU formula.
 - **Windows 11 ARM64:** native ARM64 QEMU runtime staged from the MSYS2 CLANGARM64 packages.
@@ -79,7 +79,7 @@ For OVF/VirtualBox descriptors, select the descriptor or containing folder. When
 2. Open the app and import a local VM package, VM folder, or disk image.
 3. Select a machine, choose guest architecture and memory, then select **Start target**.
 4. Start your preferred attacker VM manually.
-5. Choose the target's network mode in Machine configuration. NAT is the cross-platform default; use the displayed host IPv4 and forwarded host ports from Kali/Parrot. Bridged TAP provides Layer-2 access when a host TAP driver/interface is installed and connected to the same isolated segment as your attacker VM.
+5. Choose the target's network mode in Machine configuration. NAT is the cross-platform default; use the displayed host IPv4 and forwarded host ports from Kali/Parrot. Bridged provides Layer-2 access. macOS requires the socket_vmnet helper/LaunchDaemon; Windows ARM64 requires a TAP-Windows NDIS 6.30 adapter. Configure the attacker VM on the same isolated segment.
 6. Use **Stop target** when finished.
 
 See [Installation](docs/INSTALLATION.md), [Bundled QEMU runtime](docs/QEMU_RUNTIME.md), [Networking](docs/NETWORKING.md), and [Architecture](docs/ARCHITECTURE.md) for details.
@@ -122,7 +122,7 @@ Build artifacts are written to `release/`.
 ## Automated releases
 
 - Pull requests and pushes to `main` run the TypeScript/renderer validation workflow.
-- Run **Build installers and publish GitHub Release** from the Actions tab and enter the release version (for example `0.5.0`). The workflow builds both native runtimes, packages them into the installers, attaches the corresponding QEMU source archives, and publishes the GitHub Release.
+- Run **Build installers and publish GitHub Release** from the Actions tab and enter the release version (for example `0.6.0`). The workflow builds both native runtimes, packages them into the installers, attaches the corresponding QEMU source archives, and publishes the GitHub Release.
 
 The release pipeline uses native ARM64 GitHub-hosted runners on macOS and Windows. See `.github/workflows/release.yml`.
 
@@ -136,7 +136,7 @@ The app preserves the existing Electron application identifier so an in-place up
 
 ## Security notes
 
-Virtual machine images are untrusted code. Inspect their origin, keep targets on an isolated network, and avoid bridging intentionally vulnerable guests to trusted home, work, or public networks. The application does not elevate privileges to configure host networking. The included helper is for a Linux guest and requires the user to copy and run it manually.
+Virtual machine images are untrusted code. Inspect their origin, keep targets on an isolated network, and avoid bridging intentionally vulnerable guests to trusted home, work, or public networks. The application does not elevate privileges to configure host networking. On macOS, the user separately installs and manages the root-owned socket_vmnet daemon; on Windows, the user installs the signed ARM64 TAP driver. The included helper is for a Linux guest and requires the user to copy and run it manually.
 
 Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
