@@ -36,7 +36,11 @@ export default function App() {
   useEffect(() => {
     void refresh();
     const unsubscribe = window.lab.onLog((message) => setLogs((current) => [...current.slice(-99), message]));
-    return unsubscribe;
+    const refreshTimer = window.setInterval(() => { void refresh(); }, 3000);
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribe();
+    };
   }, []);
 
   async function importPath(filePath: string) {
@@ -201,10 +205,14 @@ export default function App() {
                 <p className="network-warning">Forwarded ports bind to all host interfaces so a VM can reach them. Keep this target on a trusted, isolated network and remove forwards you do not need.</p>
               </> : <>
                 <label className="field-label" htmlFor="tap-adapter">Host TAP adapter</label>
-                <input id="tap-adapter" className="network-adapter-input" value={networkAdapter} onChange={(event) => { setNetworkAdapter(event.target.value); setNetworkDirty(true); }} placeholder={system?.platform === 'darwin' ? 'tap0' : 'TAP-Windows Adapter V9'}/>
+                <input id="tap-adapter" className="network-adapter-input" list="tap-adapter-options" value={networkAdapter} onChange={(event) => { setNetworkAdapter(event.target.value); setNetworkDirty(true); }} placeholder={system?.platform === 'darwin' ? 'tap0' : 'TAP-Windows Adapter V9'}/>
+                <datalist id="tap-adapter-options">
+                  {(system?.tapDevices?.length ? system.tapDevices : system?.networkInterfaceNames ?? []).map((name) => <option key={name} value={name}/>)}
+                </datalist>
                 <div className="network-help">
                   <strong>Layer-2 bridge through a host TAP device</strong>
                   <span>{system?.platform === 'darwin' ? 'Requires a macOS TAP driver and an existing /dev/tapN device. QEMU vmnet is not assumed because it requires Apple VM-networking entitlement/privileged setup.' : system?.platform === 'win32' ? 'Requires an installed ARM64 TAP-Windows driver (for example from OpenVPN). Enter the exact adapter name recognized by QEMU.' : 'Requires a configured TAP device on this host.'}</span>
+                  <span>Detected TAP devices: {system?.tapDevices?.length ? system.tapDevices.join(', ') : 'none detected'}.</span>
                   <span>Attach the TAP device to the same isolated Ethernet segment as your attacker VM using host networking settings. Set VirtualBox Adapter 2 to Bridged on that same segment. Do not bridge an intentionally vulnerable target onto a public or trusted home/work LAN.</span>
                 </div>
               </>}
