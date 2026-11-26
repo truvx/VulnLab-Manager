@@ -68,6 +68,8 @@ macOS uses the [socket_vmnet](https://github.com/lima-vm/socket_vmnet) helper. Q
    PLIST_SRC="$(find "$SOCKET_PREFIX" -name "io.github.lima-vm.socket_vmnet.bridged.en0.plist" -print -quit)"
    test -n "$PLIST_SRC" || { echo "socket_vmnet bridged LaunchDaemon template not found"; exit 1; }
    PLIST="/Library/LaunchDaemons/io.github.lima-vm.socket_vmnet.bridged.$BRIDGED.plist"
+   sudo mkdir -p "$PREFIX/var/log/socket_vmnet"
+   sudo chown root:wheel "$PREFIX/var/log/socket_vmnet"
    sed -e "s@/opt@$PREFIX/opt@g" -e "s@/var@$PREFIX/var@g" -e "s@en0@$BRIDGED@g" "$PLIST_SRC" | sudo tee "$PLIST" >/dev/null
    sudo chown root:wheel "$PLIST"
    sudo chmod 644 "$PLIST"
