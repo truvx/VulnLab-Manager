@@ -82,7 +82,7 @@ For OVF/VirtualBox descriptors, select the descriptor or containing folder. When
 2. Open the app and import a local VM package, VM folder, or disk image.
 3. Select a machine, choose guest architecture and memory, then select **Start target**.
 4. Start your preferred attacker VM manually.
-5. Choose the target's network mode in Machine configuration. NAT is the cross-platform default; use the displayed host IPv4 and forwarded host ports from Kali/Parrot. Bridged provides Layer-2 access. macOS requires the socket_vmnet helper/LaunchDaemon; Windows ARM64 requires a TAP-Windows NDIS 6.30 adapter. Configure the attacker VM on the same isolated segment.
+5. Choose the target's network mode in Machine configuration. With QEMU NAT and Kali's VirtualBox adapter set to NAT, use Kali's default gateway (normally `10.0.2.2`) to scan the QEMU host-forwarded ports; run `ip route | awk '/default/ {print $3; exit}'` inside Kali to confirm it. NAT reaches only forwarded ports. For direct target-IP and broad port scans, use Bridged so the QEMU target and Kali join the same Layer-2 segment. macOS requires the socket_vmnet helper/LaunchDaemon; Windows ARM64 requires a TAP-Windows NDIS 6.30 adapter. See [Networking](NETWORKING.md) for exact Kali commands.
 6. Use **Stop target** when finished.
 
 See [Installation](docs/INSTALLATION.md), [Bundled QEMU runtime](docs/QEMU_RUNTIME.md), [Networking](docs/NETWORKING.md), and [Architecture](docs/ARCHITECTURE.md) for details.
