@@ -267,7 +267,7 @@ export default function App() {
           </div>
           <div className="traffic-peers"><strong>Observed peers</strong><span>{state.trafficStats.peerAddresses.length ? state.trafficStats.peerAddresses.join(' · ') : 'No peer IP addresses observed yet. Run a scan or connect to a service from your attacker VM.'}</span></div>
         </> : <div className="traffic-empty">{selectedMachine ? 'Start this target to monitor packets entering and leaving its virtual NIC.' : 'Select an imported target to view its network activity.'}</div>}
-        <p className="traffic-footnote">Header-only telemetry (up to 54 bytes per frame). Application payloads are not captured; the temporary capture is deleted when the target stops.</p>
+        <p className="traffic-footnote">Lightweight telemetry (up to 54 bytes per frame; may include a short payload prefix). Full packets are not stored, and the temporary capture is deleted when the target stops.</p>
       </section>
 
       <section className="panel network-panel">
