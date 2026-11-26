@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — Per-machine NAT and bridged networking (development)
+
+- Added per-machine QEMU network modes: user-mode NAT and host TAP bridge.
+- Added editable TCP/UDP host-to-guest port forwarding for NAT targets.
+- Added stable per-machine virtual MAC addresses and guest IP display (DHCP address for NAT; best-effort ARP lookup for bridged mode).
+- Added host IPv4 address discovery to show how attacker VMs can reach NAT-forwarded services.
+- Added TAP driver/interface prerequisites and isolation warnings for bridged mode.
+- Replaced the previous localhost UDP tunnel as the default QEMU network backend.
+- Updated network setup documentation for Kali, Parrot, and other manually managed attacker VMs.
+
 ## 0.5.0 — Bundled QEMU runtime (in validation)
 
 - Added pinned QEMU 11.1.3 runtime staging for macOS Apple Silicon and Windows ARM64.
