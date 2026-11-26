@@ -219,7 +219,10 @@ export default function App() {
                 <div className="host-addresses">
                   <strong>Connect from attacker VM using a host IP:</strong>
                   <span>{system?.hostIPv4Addresses?.length ? system.hostIPv4Addresses.join(' · ') : 'No non-loopback host IPv4 detected'}</span>
-                  <code>nmap -sV -p {portForwards.map((rule) => rule.hostPort).join(',') || '<host-ports>'} &lt;HOST-IP&gt;</code>
+                  <code>nmap -sV -Pn -p {portForwards.map((rule) => rule.hostPort).join(',') || '<host-ports>'} &lt;HOST-IP&gt;</code>
+                  <strong>Kali inside VirtualBox · NAT adapter</strong>
+                  <span>Use Kali's default gateway to reach the Mac host. With VirtualBox's default NAT this is normally 10.0.2.2; detect yours with the command below.</span>
+                  <code>GW="$(ip route | awk '/default/ {print $3; exit}')" && nmap -sV -Pn -p {portForwards.map((rule) => rule.hostPort).join(',') || '<host-ports>'} "$GW"</code>
                 </div>
                 <p className="network-warning">Forwarded ports bind to all host interfaces so a VM can reach them. Keep this target on a trusted, isolated network and remove forwards you do not need.</p>
               </> : <>
