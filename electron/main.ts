@@ -741,7 +741,7 @@ function qemuBinary(architecture: 'x86_64' | 'i386') {
   return architecture === 'i386' ? 'qemu-system-i386' : 'qemu-system-x86_64';
 }
 
-function buildNetworkArguments(machine: MachineRecord): string[] {
+async function buildNetworkArguments(machine: MachineRecord): Promise<string[]> {
   const mode = machine.networkMode ?? 'nat';
   const mac = machine.macAddress || machineMac(machine.id);
   if (mode === 'bridged') {
@@ -814,7 +814,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
     '-name', machine.name,
     '-drive', `file=${qemuDiskPath},format=qcow2,if=ide,index=0`,
     '-boot', 'order=c,menu=on',
-    ...buildNetworkArguments(machine),
+    ...await buildNetworkArguments(machine),
     '-display', process.platform === 'darwin' ? 'cocoa' : process.platform === 'win32' ? 'sdl' : 'gtk',
     '-monitor', 'none', '-serial', 'none', '-parallel', 'none'
   ];
