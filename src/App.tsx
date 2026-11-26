@@ -189,7 +189,7 @@ export default function App() {
                 setNetworkDirty(true);
               }}>
                 <option value="nat">NAT · attacker-accessible port forwards</option>
-                <option value="bridged">Bridged · host TAP adapter</option>
+                <option value="bridged">Bridged · {system?.platform === 'darwin' ? 'socket_vmnet' : 'TAP adapter'}</option>
               </select>
               {networkMode === 'nat' ? <>
                 <div className="network-help">
@@ -246,7 +246,7 @@ export default function App() {
                 {networkDirty ? 'Save network settings' : 'Network settings saved'}
               </button>
             </div>
-            <div className="disk-info"><span>Disk format</span><b>{selectedMachine.diskFormat.toUpperCase()}</b><span>Boot method</span><b>BIOS · IDE</b><span>Network device</span><b>{networkMode === 'nat' ? 'E1000 · QEMU user NAT' : `E1000 · TAP bridge`}</b></div>
+            <div className="disk-info"><span>Disk format</span><b>{selectedMachine.diskFormat.toUpperCase()}</b><span>Boot method</span><b>BIOS · IDE</b><span>Network device</span><b>{networkMode === 'nat' ? 'E1000 · QEMU user NAT' : system?.platform === 'darwin' ? 'E1000 · socket_vmnet bridge' : 'E1000 · TAP bridge'}</b></div>
             {state?.activeMachineId ? <button className="danger-button full" disabled={busy} onClick={() => void runAction(() => window.lab.stopMachine(), 'Stopped the QEMU target. Your attacker VM was not changed.')}>■ Stop target</button> : <button className="primary-button full" disabled={busy || networkDirty || !system?.qemuImg || (architecture === 'x86_64' ? !system?.qemuX86 : !system?.qemuI386)} onClick={() => void runAction(() => window.lab.startMachine(selectedMachine.id, architecture, memoryMiB), `Started ${selectedMachine.name}. Start your preferred attacker VM manually.`)}>▶ Start target</button>}
             <button className="danger-button full" disabled={busy || selectedMachine.status === 'running'} onClick={() => void runAction(() => window.lab.removeMachine(selectedMachine.id), `Removed ${selectedMachine.name}.`)}>Remove machine and extracted files</button>
           </> : <div className="empty-detail">Select an imported machine to configure its QEMU launch.</div>}
