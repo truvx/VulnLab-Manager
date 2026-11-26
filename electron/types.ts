@@ -1,6 +1,15 @@
 // QEMU block-driver names used for the imported source disk.
 export type DiskFormat = 'vmdk' | 'qcow' | 'qcow2' | 'raw' | 'vdi' | 'vhdx' | 'vpc';
 export type MachineStatus = 'stopped' | 'running' | 'error';
+export type NetworkMode = 'nat' | 'bridged';
+export type PortForwardProtocol = 'tcp' | 'udp';
+
+export interface PortForwardRule {
+  id: string;
+  protocol: PortForwardProtocol;
+  hostPort: number;
+  guestPort: number;
+}
 
 export interface MachineRecord {
   id: string;
@@ -14,6 +23,11 @@ export interface MachineRecord {
   memoryMiB: number;
   importedAt: string;
   status: MachineStatus;
+  networkMode?: NetworkMode;
+  networkAdapter?: string;
+  portForwards?: PortForwardRule[];
+  macAddress?: string;
+  ipAddress?: string | null;
 }
 
 export interface AppState {
@@ -28,5 +42,8 @@ export interface AppState {
     qemuI386: boolean;
     qemuBundled: boolean;
     qemuVersion: string | null;
+    hostIPv4Addresses: string[];
+    networkInterfaceNames: string[];
+    tapDevices: string[];
   };
 }
