@@ -20,20 +20,40 @@ QEMU user-mode networking blocks unsolicited inbound traffic. VulnLab Manager th
 
 You can edit, add, or remove TCP/UDP rules under **Machine configuration → Network mode → NAT**. Host ports must be 1024–65535; guest ports may be 1–65535.
 
-### Attacking a NAT-mode target from Kali or Parrot
+### Attacking a NAT-mode target from Kali in VirtualBox
 
-1. Start the attacker VM manually.
-2. Start the QEMU target from VulnLab Manager with NAT selected.
-3. In the app, note one of the **Host IPv4 addresses** listed in the network settings.
-4. From the attacker VM, scan the forwarded host ports, for example:
+This setup works when Kali's VirtualBox adapter is set to **NAT**. It does not require Kali and QEMU to share the same virtual subnet: VirtualBox NAT lets Kali reach host services through its NAT gateway, while QEMU forwards selected host ports into the vulnerable guest.
+
+1. Power on Kali with its VirtualBox network adapter set to **NAT**.
+2. Start the vulnerable target in VulnLab Manager with **NAT** selected. Confirm the target is running and that the required service ports are forwarded.
+3. In Kali, find the VirtualBox NAT gateway:
 
    ```bash
-   nmap -sV -Pn -p 2222,8080,8443,1445,13306 <HOST-IP>
+   ip route | awk '/default/ {print $3; exit}'
    ```
 
-5. Connect to a forwarded service using the host address and host-side port. For example, browse to http://<HOST-IP>:8080 for the guest's port 80 service.
+   With VirtualBox's default per-VM NAT, this is normally `10.0.2.2`. Use the address printed by the command if yours differs. This is the Mac host as reached from Kali; it is **not** the QEMU guest's private IP.
 
-NAT is not a transparent Layer-2 network. The attacker VM cannot ARP-scan the guest's private 10.77.0.0/24 address or scan ports that have not been forwarded. Add a forwarding rule for each service you need to reach. A guest using a manually configured static IP rather than DHCP must be changed to use the QEMU NAT subnet/address expected by the rules, or use Bridged mode instead.
+4. Scan the forwarded ports through that gateway. For the default rules:
+
+   ```bash
+   nmap -sV -Pn -p 2222,8080,8443,1445,13306 10.0.2.2
+   ```
+
+   Replace `10.0.2.2` with the gateway from step 3 if needed. Each reported host port maps to the guest port shown in Machine configuration (for example, host TCP 2222 forwards to guest TCP 22).
+
+5. Connect to the service using the **host-side** port. For example:
+
+   ```bash
+   ssh -p 2222 <guest-user>@10.0.2.2
+   curl http://10.0.2.2:8080/
+   ```
+
+   These examples use the default SSH and HTTP forwards. Substitute your own username and rules.
+
+You can also use one of the Mac's **Host IPv4 addresses** shown by the app when Kali has a route to that host interface (for example, when Kali is bridged onto the same LAN). When Kali uses VirtualBox NAT, its default gateway is the most direct host address to try.
+
+**NAT limitations:** this is TCP/UDP port forwarding, not a shared Layer-2 network. Kali cannot ARP-scan QEMU's private 10.77.0.0/24 network, discover the target by its private IP, or scan guest ports that you have not forwarded. Add a forwarding rule for every service you need to test. For broad port discovery (including a full TCP port scan without manually creating forwards), use **Bridged** mode instead.
 
 **Exposure warning:** forwarded ports bind to all host interfaces so the attacker VM can reach them. A host firewall may need to allow those host-side ports. Keep the target on a trusted, isolated environment, remove unused forwards, and do not expose deliberately vulnerable services to an untrusted LAN or the internet.
 
@@ -80,8 +100,8 @@ macOS uses the [socket_vmnet](https://github.com/lima-vm/socket_vmnet) helper. Q
 
    This installs a root-owned system LaunchDaemon for the chosen interface. It creates the socket at `$(brew --prefix)/var/run/socket_vmnet.bridged.en0`. Only do this for software and configuration you trust; socket_vmnet needs root to call Apple's vmnet framework. The daemon is separate from VulnLab Manager and is not started or stopped by the app.
 
-4. In VulnLab Manager, select **Bridged**, choose the same interface name (for example `en0`), save, then start the target. The app launches QEMU through `socket_vmnet_client` and does not run QEMU as root.
-5. In VirtualBox, power off Kali/Parrot and configure the attacker VM's second adapter as **Bridged Adapter**, selecting the same physical interface (for example `en0`). Keep the first adapter as your regular internet connection if needed.
+4. In VulnLab Manager, select **Bridged**, choose the physical interface (for example `en0`), save the network settings, then start the target. The app launches QEMU through `socket_vmnet_client`; QEMU itself does not run as root.
+5. In VirtualBox, power off Kali/Parrot. Set one of its adapters to **Bridged Adapter** and select the same physical interface (for example `en0`). You can keep another adapter for ordinary internet access if required. Start Kali again. Both Kali and the QEMU target should receive addresses on the same LAN/subnet.
 6. If the Linux attacker VM still has the old static UDP-tunnel profile (for example `VulnLab-Lab` with `192.168.77.1/24`), change that second adapter to DHCP so it joins the bridged LAN:
 
    ```bash
@@ -91,14 +111,13 @@ macOS uses the [socket_vmnet](https://github.com/lima-vm/socket_vmnet) helper. Q
    ```
 
    Use your actual connection/profile and interface names if they differ. Keep `ipv4.never-default yes` so the lab interface does not replace the attacker's normal default internet route.
-7. Start the attacker VM and QEMU target. Confirm they received addresses in the same subnet, then scan the segment from Kali/Parrot:
+7. Confirm Kali and the target have addresses in the same subnet. Use `ip -br addr` in Kali and the guest IP displayed by VulnLab Manager. Then scan the target directly:
 
    ```bash
-   sudo arp-scan --interface=eth1 --localnet
-   sudo nmap -sn <LAB-SUBNET>
+   nmap -sV -Pn -p- <TARGET-IP>
    ```
 
-   The target's IP should appear in the QEMU machine list once the host ARP table has learned its MAC address.
+   For UDP discovery, you can additionally run `sudo nmap -sU --top-ports 100 <TARGET-IP>`. ARP discovery is optional; on Wi-Fi, wireless bridging and access-point behavior can make layer-2 discovery less reliable than scanning a known target IP.
 
 **Important:** Bridging onto Wi-Fi may be restricted by some access points, enterprise networks, or VirtualBox/macOS driver behavior. A wired Ethernet interface and a dedicated isolated switch/VLAN are more reliable. Never bridge an intentionally vulnerable target to a public or trusted home/work LAN.
 
@@ -140,7 +159,8 @@ The optional lab-network-setup.sh remains available for manually configuring a L
 ## Troubleshooting
 
 - **NAT guest has no address:** confirm the guest is set to obtain IPv4 by DHCP and restart it.
-- **Kali cannot reach a forwarded port:** use one of the host IPv4 addresses shown in the app; verify that the host OS firewall permits the host-side port; verify that the selected host port is forwarded to the service's actual guest port.
+- **Kali using VirtualBox NAT cannot reach a forwarded port:** run `ip route | awk '/default/ {print $3; exit}'` in Kali and scan that gateway address (normally `10.0.2.2`), not the QEMU guest IP. Verify that the QEMU forward is saved, the target is running, and macOS Firewall permits the host-side port.
+- **Kali cannot reach a forwarded port from another VirtualBox network mode:** use a Mac host IPv4 address reachable from that network; verify the host firewall and the selected host-to-guest port mapping.
 - **Port-forward collision:** choose a different host port in Machine configuration. Guest service ports do not need to change.
 - **Bridged target has no IP:** on macOS, verify the socket_vmnet LaunchDaemon is running for the selected enX interface and its bridged socket exists; on Windows, verify the ARM64 TAP-Windows adapter is installed. In both cases verify the attacker VM shares the same Layer-2 segment and DHCP is available.
 - **Bridged mode fails at launch:** on macOS, confirm socket_vmnet_client is installed and the bridged LaunchDaemon socket path exists for the selected enX interface; on Windows, confirm the selected TAP adapter name matches the installed adapter.
