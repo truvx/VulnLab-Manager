@@ -1,4 +1,4 @@
-# Project Status — 0.5.0 development
+# Project Status — 0.6.0 development
 
 ## Implemented in source
 
@@ -12,6 +12,9 @@
 - Runtime version detection and bundled-vs-system QEMU indication in the UI.
 - Native MSYS2 CLANGARM64 QEMU package setup in the Windows ARM64 release workflow.
 - Release workflow source archive attachments for QEMU and the MSYS2 Windows package recipe.
+- Per-machine QEMU user-mode NAT with configurable TCP/UDP host-forward rules.
+- Per-machine QEMU TAP bridged backend for hosts with a configured TAP device.
+- Stable QEMU MAC addresses, NAT DHCP address display, best-effort bridged ARP discovery, and host IPv4 discovery.
 - Generic optional Linux network helper for manual guest-side use.
 - Attacker VMs remain fully manual; the app starts/stops only its own QEMU target.
 
@@ -24,7 +27,9 @@
 - Compatibility remains image-specific. The current default guest profile is BIOS/IDE/E1000 and will not boot every imported machine.
 - One QEMU target at a time.
 - Attacker VMs are never started, stopped, or reconfigured by this application.
-- The optional UDP tunnel requires the user to configure the attacker VM or its hypervisor manually.
+- NAT provides attacker access only to explicitly forwarded services; it is not Layer-2 adjacency and cannot expose unforwarded ports to scans.
+- Bridged TAP requires a host TAP driver/device and user-managed Layer-2 bridging to the attacker's isolated network. No kernel driver or host network bridge is installed automatically.
+- macOS bridged TAP has not yet been tested on current Apple Silicon macOS; `vmnet` mode is not used because Apple's networking entitlement is restricted.
 - Releases are unsigned and macOS notarization is not configured.
 - No project license has been selected yet.
 
