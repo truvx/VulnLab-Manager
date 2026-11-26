@@ -920,6 +920,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   await runTool('qemu-img', ['create', '-f', 'qcow2', '-F', machine.diskFormat, '-b', machine.diskPath, overlayPath]);
   log(`Created disposable write overlay: ${overlayPath}`);
   const qemuDiskPath = process.platform === 'win32' ? overlayPath.replace(/\\/g, '/') : overlayPath;
+  const capturePath = path.join(snapshotDir, `network-${new Date().toISOString().replace(/[:.]/g, '-')}.pcap`);
   const qemuArgs = [
     ...(existsSync(bundledQemuDataDir()) ? ['-L', bundledQemuDataDir()] : []),
     '-machine', 'pc', '-accel', 'tcg', '-cpu', 'max', '-smp', '1', '-m', String(memoryMiB),
@@ -931,8 +932,6 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
     '-display', process.platform === 'darwin' ? 'cocoa' : process.platform === 'win32' ? 'sdl' : 'gtk',
     '-monitor', 'none', '-serial', 'none', '-parallel', 'none'
   ];
-  const capturePath = path.join(snapshotDir, `network-${new Date().toISOString().replace(/[:.]/g, '-')}.pcap`);
-
   log(`Starting ${machine.name} with ${qemuBinary(architecture)} (TCG emulation, ${memoryMiB} MiB RAM).`);
   log(`QEMU disk: ${machine.diskPath}`);
   const qemuExecutable = await resolveCommand(qemuBinary(architecture));
