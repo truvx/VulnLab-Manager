@@ -59,6 +59,9 @@ let captureByteOrder: 'le' | 'be' | null = null;
 let captureLinkType: number | null = null;
 let trafficStats: NetworkTrafficStats = emptyTrafficStats();
 let trafficCleanupPromise: Promise<void> = Promise.resolve();
+let trafficPollPromise: Promise<void> | null = null;
+let cachedHostNetworkInfo: HostNetworkInfo | null = null;
+let cachedHostNetworkInfoAt = 0;
 let targetLog = '';
 
 function emptyTrafficStats(): NetworkTrafficStats {
@@ -306,7 +309,17 @@ async function discoverWindowsTapAdapters(): Promise<string[]> {
   }
 }
 
-async function getHostNetworkInfo() {
+interface HostNetworkInfo {
+  hostIPv4Addresses: string[];
+  networkInterfaceNames: string[];
+  tapDevices: string[];
+  bridgeAdapters: string[];
+  vmnetSocketClientAvailable: boolean;
+  vmnetBridgedSockets: string[];
+}
+
+async function getHostNetworkInfo(): Promise<HostNetworkInfo> {
+  if (cachedHostNetworkInfo && Date.now() - cachedHostNetworkInfoAt < 15_000) return cachedHostNetworkInfo;
   const interfaces = os.networkInterfaces();
   const hostIPv4Addresses = [...new Set(Object.values(interfaces).flatMap((items) =>
     (items ?? []).filter((item) => item.family === 'IPv4' && !item.internal).map((item) => item.address)
@@ -329,7 +342,9 @@ async function getHostNetworkInfo() {
     ? (await Promise.all(bridgeAdapters.flatMap((adapter) => socketVmnetSocketCandidates(adapter))
       .map(async (candidate) => await pathExists(candidate) ? candidate : null))).filter((item): item is string => !!item)
     : [];
-  return { hostIPv4Addresses, networkInterfaceNames, tapDevices, bridgeAdapters, vmnetSocketClientAvailable, vmnetBridgedSockets };
+  cachedHostNetworkInfo = { hostIPv4Addresses, networkInterfaceNames, tapDevices, bridgeAdapters, vmnetSocketClientAvailable, vmnetBridgedSockets };
+  cachedHostNetworkInfoAt = Date.now();
+  return cachedHostNetworkInfo;
 }
 
 async function resolveGuestIpByMac(macAddress: string): Promise<string | null> {
@@ -855,7 +870,7 @@ function addTrafficPacket(packet: Buffer, originalLength: number, guestMac: stri
   trafficStats.captureAvailable = true;
 }
 
-async function pollTrafficCapture() {
+async function pollTrafficCaptureInternal() {
   if (!activeCapturePath) return;
   let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
   try {
@@ -897,6 +912,12 @@ async function pollTrafficCapture() {
   } finally {
     await handle?.close().catch(() => undefined);
   }
+}
+
+function pollTrafficCapture(): Promise<void> {
+  if (trafficPollPromise) return trafficPollPromise;
+  trafficPollPromise = pollTrafficCaptureInternal().finally(() => { trafficPollPromise = null; });
+  return trafficPollPromise;
 }
 
 let activeGuestMac = '52:54:00:00:00:00';
