@@ -44,6 +44,7 @@ export interface AppState {
   machines: MachineRecord[];
   activeMachineId: string | null;
   trafficStats: NetworkTrafficStats;
+  trafficMachineId: string | null;
   labRoot: string;
   system: {
     platform: string;
