@@ -64,7 +64,7 @@ The v0.6.0 development packaging pipeline is configured to include a host-native
 - **macOS Apple Silicon:** native ARM64 QEMU runtime staged from the Homebrew QEMU formula.
 - **Windows 11 ARM64:** native ARM64 QEMU runtime staged from the MSYS2 CLANGARM64 packages.
 
-When running a validated v0.5.0 installer, the application prefers its bundled runtime. It falls back to a compatible QEMU installation on `PATH` for development or advanced troubleshooting. It displays the detected QEMU version and whether the bundled runtime is active.
+When running a validated release installer, the application prefers its bundled runtime. It falls back to a compatible QEMU installation on `PATH` for development or advanced troubleshooting. It displays the detected QEMU version and whether the bundled runtime is active.
 
 QEMU uses TCG software emulation to run x86/i386 guests on ARM64 hosts. This provides compatibility without a separate QEMU setup, but emulation can be slower than running the same guest on an x86_64 host. The release does not promise that every image will boot: guest firmware, disk controller, CPU model, and network-device requirements still matter.
 
