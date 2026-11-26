@@ -24,7 +24,7 @@ flowchart TD
 
 ## Renderer responsibilities
 
-- Display host tool availability, imported machines, per-machine network configuration, forwarded service ports, and activity logs.
+- Display host tool availability, imported machines, per-machine network mode and port forwards, guest IP, live packet/byte counters, observed peers, and Activity logs.
 - Invoke typed IPC methods through the isolated preload bridge.
 - Does not access Node APIs or spawn processes directly.
 
