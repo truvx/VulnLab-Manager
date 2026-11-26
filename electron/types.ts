@@ -30,9 +30,20 @@ export interface MachineRecord {
   ipAddress?: string | null;
 }
 
+export interface NetworkTrafficStats {
+  captureAvailable: boolean;
+  rxPackets: number;
+  txPackets: number;
+  rxBytes: number;
+  txBytes: number;
+  lastActivityAt: string | null;
+  peerAddresses: string[];
+}
+
 export interface AppState {
   machines: MachineRecord[];
   activeMachineId: string | null;
+  trafficStats: NetworkTrafficStats;
   labRoot: string;
   system: {
     platform: string;
