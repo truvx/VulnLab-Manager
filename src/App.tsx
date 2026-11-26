@@ -167,7 +167,7 @@ export default function App() {
           <div className="panel-heading"><div><h2>Your machines</h2><p>{state?.machines.length ?? 0} imported machine{state?.machines.length === 1 ? '' : 's'}</p></div><span className="count-badge">{state?.machines.length ?? 0}</span></div>
           {!state?.machines.length ? <div className="empty-state"><div className="empty-glyph">▤</div><strong>No machines imported</strong><span>Import a vulnerable VM package, virtual disk, or machine folder to get started.</span></div> : <div className="machine-list">
             {state.machines.map((machine) => <button className={`machine-row ${selectedId === machine.id ? 'selected' : ''}`} key={machine.id} onClick={() => setSelectedId(machine.id)}>
-              <div className="machine-icon">▣</div><div className="machine-meta"><strong>{machine.name}</strong><span>{machine.diskFormat.toUpperCase()} · {machine.architecture} · IP {machine.ipAddress ?? (machine.status === 'running' ? 'discovering…' : '—')} · {new Date(machine.importedAt).toLocaleDateString()}</span></div><span className={`status ${machine.status}`}>{machine.status}</span>
+              <div className="machine-icon">▣</div><div className="machine-meta"><strong>{machine.name}</strong><span>{machine.diskFormat.toUpperCase()} · {machine.architecture} · IP {machine.ipAddress ?? (machine.status === 'running' ? 'discovering…' : '—')}{machine.status === 'running' && machine.networkMode === 'nat' ? ' (expected)' : ''} · {new Date(machine.importedAt).toLocaleDateString()}</span></div><span className={`status ${machine.status}`}>{machine.status}</span>
             </button>)}
           </div>}
         </section>
@@ -175,7 +175,7 @@ export default function App() {
         <section className="panel detail-panel">
           <div className="panel-heading"><div><h2>Machine configuration</h2><p>QEMU emulation settings</p></div><span className="gear">⚙</span></div>
           {selectedMachine ? <>
-            <div className="target-summary"><div className="target-avatar">{selectedMachine.name.slice(0, 1).toUpperCase()}</div><div><strong>{selectedMachine.name}</strong><span>{selectedMachine.diskPath.split(/[\\/]/).pop()}</span><span className="guest-ip">Guest IP: {selectedMachine.ipAddress ?? (selectedMachine.status === 'running' ? 'waiting for DHCP/ARP' : 'not running')}</span></div></div>
+            <div className="target-summary"><div className="target-avatar">{selectedMachine.name.slice(0, 1).toUpperCase()}</div><div><strong>{selectedMachine.name}</strong><span>{selectedMachine.diskPath.split(/[\\/]/).pop()}</span><span className="guest-ip">{networkMode === 'nat' ? 'Expected guest IP: ' : 'Guest IP: '}{selectedMachine.ipAddress ?? (selectedMachine.status === 'running' ? 'waiting for DHCP/ARP' : 'not running')}</span></div></div>
             <label className="field-label" htmlFor="architecture">Guest architecture</label>
             <select id="architecture" value={architecture} onChange={(event) => setArchitecture(event.target.value as 'x86_64' | 'i386')}><option value="x86_64">x86_64 (64-bit / 32-bit guests)</option><option value="i386">i386 (32-bit emulator)</option></select>
             <label className="field-label" htmlFor="memory">Memory allocation</label>
@@ -262,7 +262,7 @@ export default function App() {
           <div className="traffic-metrics">
             <div><span>Received</span><strong>{state.trafficStats.rxPackets.toLocaleString()}</strong><small>{state.trafficStats.rxBytes.toLocaleString()} bytes</small></div>
             <div><span>Sent</span><strong>{state.trafficStats.txPackets.toLocaleString()}</strong><small>{state.trafficStats.txBytes.toLocaleString()} bytes</small></div>
-            <div><span>Peer IPs</span><strong>{state.trafficStats.peerAddresses.length}</strong><small>{state.trafficStats.captureAvailable ? 'Ethernet headers observed' : 'Waiting for packets'}</small></div>
+            <div><span>Peer IPs</span><strong>{state.trafficStats.peerAddresses.length}</strong><small>{state.trafficStats.rxPackets + state.trafficStats.txPackets > 0 ? 'Traffic frames recorded' : state.trafficStats.captureAvailable ? 'Capture ready; waiting for packets' : 'Waiting for packets'}</small></div>
             <div><span>Last activity</span><strong className="traffic-last">{state.trafficStats.lastActivityAt ? new Date(state.trafficStats.lastActivityAt).toLocaleTimeString() : '—'}</strong><small>{state.trafficStats.captureAvailable ? 'Capture active or complete' : 'No frames captured yet'}</small></div>
           </div>
           <div className="traffic-peers"><strong>Observed peers</strong><span>{state.trafficStats.peerAddresses.length ? state.trafficStats.peerAddresses.join(' · ') : 'No peer IP addresses observed yet. Run a scan or connect to a service from your attacker VM.'}</span></div>
