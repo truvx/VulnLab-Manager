@@ -10,7 +10,7 @@ import yauzl from 'yauzl';
 import { pipeline } from 'node:stream/promises';
 import { XMLParser } from 'fast-xml-parser';
 import * as tar from 'tar';
-import type { AppState, DiskFormat, MachineRecord, NetworkMode, PortForwardRule } from './types';
+import type { AppState, DiskFormat, MachineRecord, NetworkMode, PortForwardRule, NetworkTrafficStats } from './types';
 
 const execFileAsync = promisify(execFile);
 const NAT_GUEST_IP = '10.77.0.15';
@@ -52,7 +52,24 @@ const MAX_SINGLE_FILE_BYTES = 90 * 1024 * 1024 * 1024;
 let mainWindow: BrowserWindow | null = null;
 let targetProcess: ChildProcess | null = null;
 let activeMachineId: string | null = null;
+let activeCapturePath: string | null = null;
+let captureReadOffset = 0;
+let captureByteOrder: 'le' | 'be' | null = null;
+let captureLinkType: number | null = null;
+let trafficStats: NetworkTrafficStats = emptyTrafficStats();
 let targetLog = '';
+
+function emptyTrafficStats(): NetworkTrafficStats {
+  return {
+    captureAvailable: false,
+    rxPackets: 0,
+    txPackets: 0,
+    rxBytes: 0,
+    txBytes: 0,
+    lastActivityAt: null,
+    peerAddresses: []
+  };
+}
 
 function log(message: string) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -794,6 +811,101 @@ async function resolveBridgedLauncher(machine: MachineRecord, qemuExecutable: st
   return { executable: client, prefixArgs: [socketPath, qemuExecutable] };
 }
 
+function bytesToIPv4(buffer: Buffer, offset: number): string {
+  return [buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]].join('.');
+}
+
+function bytesToIPv6(buffer: Buffer, offset: number): string {
+  return Array.from({ length: 8 }, (_, index) => buffer.readUInt16BE(offset + index * 2).toString(16)).join(':');
+}
+
+function addTrafficPacket(packet: Buffer, originalLength: number, guestMac: string) {
+  if (packet.length < 14) return;
+  const normalizedMac = guestMac.toLowerCase().replace(/[^a-f0-9]/g, '');
+  const sourceMac = packet.subarray(6, 12).toString('hex');
+  const destinationMac = packet.subarray(0, 6).toString('hex');
+  const outgoing = sourceMac === normalizedMac;
+  const incoming = destinationMac === normalizedMac;
+  if (!outgoing && !incoming) return;
+
+  if (outgoing) {
+    trafficStats.txPackets += 1;
+    trafficStats.txBytes += originalLength;
+  } else {
+    trafficStats.rxPackets += 1;
+    trafficStats.rxBytes += originalLength;
+  }
+
+  let peer: string | null = null;
+  const etherType = packet.readUInt16BE(12);
+  if (etherType === 0x0800 && packet.length >= 34) {
+    peer = outgoing ? bytesToIPv4(packet, 30) : bytesToIPv4(packet, 26);
+  } else if (etherType === 0x86dd && packet.length >= 54) {
+    peer = outgoing ? bytesToIPv6(packet, 38) : bytesToIPv6(packet, 22);
+  } else if (etherType === 0x0806 && packet.length >= 42) {
+    peer = outgoing ? bytesToIPv4(packet, 38) : bytesToIPv4(packet, 28);
+  }
+
+  if (peer && peer !== '0.0.0.0' && peer !== '255.255.255.255' && peer !== '::') {
+    trafficStats.peerAddresses = [peer, ...trafficStats.peerAddresses.filter((item) => item !== peer)].slice(0, 6);
+  }
+  trafficStats.lastActivityAt = new Date().toISOString();
+  trafficStats.captureAvailable = true;
+}
+
+async function pollTrafficCapture() {
+  if (!activeCapturePath) return;
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  try {
+    handle = await fs.open(activeCapturePath, 'r');
+    const stat = await handle.stat();
+    if (stat.size < 24) return;
+
+    if (!captureByteOrder || captureLinkType === null) {
+      const header = Buffer.alloc(24);
+      const read = await handle.read(header, 0, header.length, 0);
+      if (read.bytesRead < 24) return;
+      const magic = header.readUInt32LE(0);
+      if (magic === 0xa1b2c3d4 || magic === 0xa1b23c4d) captureByteOrder = 'le';
+      else if (header.readUInt32BE(0) === 0xa1b2c3d4 || header.readUInt32BE(0) === 0xa1b23c4d) captureByteOrder = 'be';
+      else return;
+      captureLinkType = captureByteOrder === 'le' ? header.readUInt32LE(20) : header.readUInt32BE(20);
+      if (captureLinkType !== 1) return; // Ethernet link type only.
+      captureReadOffset = 24;
+      trafficStats.captureAvailable = true;
+    }
+
+    const remaining = Math.min(Math.max(0, stat.size - captureReadOffset), 2 * 1024 * 1024);
+    if (remaining < 16) return;
+    const chunk = Buffer.alloc(remaining);
+    const read = await handle.read(chunk, 0, remaining, captureReadOffset);
+    const data = chunk.subarray(0, read.bytesRead);
+    let cursor = 0;
+    const readUInt32 = (offset: number) => captureByteOrder === 'le' ? data.readUInt32LE(offset) : data.readUInt32BE(offset);
+    while (cursor + 16 <= data.length) {
+      const capturedLength = readUInt32(cursor + 8);
+      const originalLength = readUInt32(cursor + 12);
+      if (capturedLength > 65535 || cursor + 16 + capturedLength > data.length) break;
+      addTrafficPacket(data.subarray(cursor + 16, cursor + 16 + capturedLength), originalLength, activeGuestMac);
+      cursor += 16 + capturedLength;
+    }
+    captureReadOffset += cursor;
+  } catch {
+    // Capture files may not exist yet or may be removed as QEMU exits.
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+let activeGuestMac = '52:54:00:00:00:00';
+
+async function finishTrafficCapture() {
+  await pollTrafficCapture();
+  const capturePath = activeCapturePath;
+  activeCapturePath = null;
+  if (capturePath) await fs.rm(capturePath, { force: true }).catch(() => undefined);
+}
+
 async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryMiB: number) {
   if (targetProcess && !targetProcess.killed) throw new Error('A QEMU target is already running. Stop it before starting another target.');
   const machines = await readMachines();
@@ -815,14 +927,23 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
     '-drive', `file=${qemuDiskPath},format=qcow2,if=ide,index=0`,
     '-boot', 'order=c,menu=on',
     ...await buildNetworkArguments(machine),
+    '-object', `filter-dump,id=networktrace,netdev=labnet,file=${capturePath.replace(/\\\\/g, '/')},maxlen=54`,
     '-display', process.platform === 'darwin' ? 'cocoa' : process.platform === 'win32' ? 'sdl' : 'gtk',
     '-monitor', 'none', '-serial', 'none', '-parallel', 'none'
   ];
+  const capturePath = path.join(snapshotDir, `network-${new Date().toISOString().replace(/[:.]/g, '-')}.pcap`);
+
   log(`Starting ${machine.name} with ${qemuBinary(architecture)} (TCG emulation, ${memoryMiB} MiB RAM).`);
   log(`QEMU disk: ${machine.diskPath}`);
   const qemuExecutable = await resolveCommand(qemuBinary(architecture));
   if (!qemuExecutable) throw new Error(`${qemuBinary(architecture)} was not found. Install QEMU and restart the app.`);
   const launcher = await resolveBridgedLauncher(machine, qemuExecutable);
+  activeCapturePath = capturePath;
+  captureReadOffset = 0;
+  captureByteOrder = null;
+  captureLinkType = null;
+  activeGuestMac = machine.macAddress || machineMac(machine.id);
+  trafficStats = emptyTrafficStats();
   const child = spawn(launcher.executable, [...launcher.prefixArgs, ...qemuArgs], {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: qemuRuntimeEnvironment()
@@ -834,6 +955,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   child.on('error', (error) => {
     const exitedId = activeMachineId;
     log(`QEMU launch error: ${error.message}`);
+    void finishTrafficCapture();
     targetProcess = null;
     activeMachineId = null;
     if (exitedId) void readMachines().then((items) => writeMachines(items.map((item) => item.id === exitedId ? { ...item, status: 'stopped' as const } : item)));
@@ -841,6 +963,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   child.on('exit', (code, signal) => {
     const exitedId = activeMachineId;
     log(`QEMU exited (code=${code ?? 'none'}, signal=${signal ?? 'none'}).`);
+    void finishTrafficCapture();
     targetProcess = null;
     activeMachineId = null;
     if (exitedId) void readMachines().then((items) => writeMachines(items.map((item) => item.id === exitedId ? { ...item, status: 'stopped' as const } : item)));
@@ -929,9 +1052,11 @@ app.whenReady().then(async () => {
       }
       return { ...machine, ipAddress };
     }));
+    await pollTrafficCapture();
     return {
       machines: displayedMachines,
       activeMachineId,
+      trafficStats,
       labRoot: getLabRoot(),
       system: await getSystemInfo()
     };
