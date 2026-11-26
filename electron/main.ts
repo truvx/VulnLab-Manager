@@ -269,7 +269,7 @@ async function getHostNetworkInfo() {
       tapDevices = [];
     }
   } else if (process.platform === 'win32') {
-    tapDevices = networkInterfaceNames.filter((name) => /tap|openvpn|wintun/i.test(name));
+    tapDevices = networkInterfaceNames.filter((name) => /tap|openvpn/i.test(name));
   }
   return { hostIPv4Addresses, networkInterfaceNames, tapDevices };
 }
@@ -726,7 +726,7 @@ function buildNetworkArguments(machine: MachineRecord): string[] {
 
   const rules = validatePortForwards(machine.portForwards ?? defaultPortForwards());
   const forwardArgs = rules.map((rule) =>
-    `hostfwd=${rule.protocol}:0.0.0.0:${rule.hostPort}-:${rule.guestPort}`
+    `hostfwd=${rule.protocol}:0.0.0.0:${rule.hostPort}-${NAT_GUEST_IP}:${rule.guestPort}`
   );
   const backend = [
     'user',
