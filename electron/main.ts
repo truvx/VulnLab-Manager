@@ -52,6 +52,7 @@ const MAX_SINGLE_FILE_BYTES = 90 * 1024 * 1024 * 1024;
 let mainWindow: BrowserWindow | null = null;
 let targetProcess: ChildProcess | null = null;
 let activeMachineId: string | null = null;
+let trafficMachineId: string | null = null;
 let activeCapturePath: string | null = null;
 let captureReadOffset = 0;
 let captureByteOrder: 'le' | 'be' | null = null;
@@ -942,6 +943,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
   captureByteOrder = null;
   captureLinkType = null;
   activeGuestMac = machine.macAddress || machineMac(machine.id);
+  trafficMachineId = machine.id;
   trafficStats = emptyTrafficStats();
   const child = spawn(launcher.executable, [...launcher.prefixArgs, ...qemuArgs], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -1056,6 +1058,7 @@ app.whenReady().then(async () => {
       machines: displayedMachines,
       activeMachineId,
       trafficStats,
+      trafficMachineId,
       labRoot: getLabRoot(),
       system: await getSystemInfo()
     };
