@@ -7,8 +7,8 @@ flowchart TD
   UI[React renderer] -->|typed IPC via preload| MAIN[Electron main process]
   MAIN --> LIB[Local machine library\n~/VulnLab/machines]
   MAIN --> QEMU[QEMU process\nTarget VM only]
-  QEMU --> UDP[UDP datagram endpoint\n127.0.0.1:10002 ⇄ 10001]
-  UDP <-->|optional isolated tunnel| ATTACKER[Attacker VM managed manually\nKali / Parrot / other]
+  QEMU --> NET[Per-machine network backend\\nQEMU user NAT and host forwards or bridged Layer 2]
+  NET <-->|forwarded host ports or shared L2 segment| ATTACKER[Attacker VM managed manually\\nKali / Parrot / other]
 ```
 
 ## Main process responsibilities
