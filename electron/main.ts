@@ -10,11 +10,41 @@ import yauzl from 'yauzl';
 import { pipeline } from 'node:stream/promises';
 import { XMLParser } from 'fast-xml-parser';
 import * as tar from 'tar';
-import type { AppState, DiskFormat, MachineRecord } from './types';
+import type { AppState, DiskFormat, MachineRecord, NetworkMode, PortForwardRule } from './types';
 
 const execFileAsync = promisify(execFile);
-const UDP_LOCAL_PORT = 10002;
-const UDP_REMOTE_PORT = 10001;
+const NAT_GUEST_IP = '10.77.0.15';
+const NAT_SUBNET = '10.77.0.0/24';
+
+function defaultPortForwards(): PortForwardRule[] {
+  return [
+    { id: 'ssh', protocol: 'tcp', hostPort: 2222, guestPort: 22 },
+    { id: 'http', protocol: 'tcp', hostPort: 8080, guestPort: 80 },
+    { id: 'https', protocol: 'tcp', hostPort: 8443, guestPort: 443 },
+    { id: 'smb', protocol: 'tcp', hostPort: 1445, guestPort: 445 },
+    { id: 'mysql', protocol: 'tcp', hostPort: 13306, guestPort: 3306 }
+  ];
+}
+
+function machineMac(id: string): string {
+  const digest = crypto.createHash('sha256').update(id).digest();
+  return [0x52, 0x54, 0x00, digest[0], digest[1], digest[2]]
+    .map((value) => value.toString(16).padStart(2, '0')).join(':');
+}
+
+function normalizeMachines(value: unknown): MachineRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const machine = item as MachineRecord;
+    return {
+      ...machine,
+      networkMode: machine.networkMode === 'bridged' ? 'bridged' : 'nat',
+      networkAdapter: typeof machine.networkAdapter === 'string' ? machine.networkAdapter : '',
+      portForwards: Array.isArray(machine.portForwards) ? machine.portForwards : defaultPortForwards(),
+      macAddress: machine.macAddress || machineMac(machine.id)
+    };
+  });
+}
 const MAX_ENTRIES = 100_000;
 const MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024 * 1024;
 const MAX_SINGLE_FILE_BYTES = 90 * 1024 * 1024 * 1024;
@@ -43,8 +73,8 @@ function dbPath() {
 async function readMachines(): Promise<MachineRecord[]> {
   try {
     const raw = await fs.readFile(dbPath(), 'utf8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = normalizeMachines(JSON.parse(raw));
+    return parsed;
   } catch {
     // Product/package branding changed in 0.3.0. Recover the previous database
     // from common macOS Electron userData folder names instead of showing an empty library.
@@ -57,11 +87,11 @@ async function readMachines(): Promise<MachineRecord[]> {
     for (const legacyPath of legacyDbPaths) {
       try {
         const raw = await fs.readFile(legacyPath, 'utf8');
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          await writeMachines(parsed as MachineRecord[]);
+        const parsed = normalizeMachines(JSON.parse(raw));
+        if (parsed.length || Array.isArray(JSON.parse(raw))) {
+          await writeMachines(parsed);
           log(`Recovered the existing machine library from ${path.dirname(legacyPath)}.`);
-          return parsed as MachineRecord[];
+          return parsed;
         }
       } catch {
         // Try the next legacy application-data path.
@@ -225,6 +255,87 @@ async function runTool(command: string, args: string[], options: ExecFileOptions
   });
 }
 
+async function getHostNetworkInfo() {
+  const interfaces = os.networkInterfaces();
+  const hostIPv4Addresses = [...new Set(Object.values(interfaces).flatMap((items) =>
+    (items ?? []).filter((item) => item.family === 'IPv4' && !item.internal).map((item) => item.address)
+  ))];
+  const networkInterfaceNames = Object.keys(interfaces).filter((name) => name !== 'lo' && name !== 'lo0');
+  let tapDevices: string[] = [];
+  if (process.platform === 'darwin') {
+    try {
+      tapDevices = (await fs.readdir('/dev')).filter((name) => /^tap\\d+$/.test(name)).sort();
+    } catch {
+      tapDevices = [];
+    }
+  } else if (process.platform === 'win32') {
+    tapDevices = networkInterfaceNames.filter((name) => /tap|openvpn|wintun/i.test(name));
+  }
+  return { hostIPv4Addresses, networkInterfaceNames, tapDevices };
+}
+
+async function resolveGuestIpByMac(macAddress: string): Promise<string | null> {
+  try {
+    const arp = await resolveCommand('arp');
+    if (!arp) return null;
+    const args = process.platform === 'win32' ? ['-a'] : ['-an'];
+    const { stdout } = await execFileAsync(arp, args, { encoding: 'utf8', timeout: 2500 });
+    const wanted = macAddress.toLowerCase().replace(/[:-]/g, '');
+    for (const line of stdout.split(/\\r?\\n/)) {
+      if (line.toLowerCase().replace(/[:-]/g, '').includes(wanted)) {
+        const ip = line.match(/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/)?.[0];
+        if (ip && ip !== '0.0.0.0') return ip;
+      }
+    }
+  } catch {
+    // ARP discovery is best-effort; bridged guests may not have exchanged traffic yet.
+  }
+  return null;
+}
+
+function validatePortForwards(rules: PortForwardRule[]): PortForwardRule[] {
+  if (!Array.isArray(rules) || rules.length > 32) {
+    throw new Error('Use between 0 and 32 port-forwarding rules.');
+  }
+  const used = new Set<string>();
+  return rules.map((rule) => {
+    const protocol = rule.protocol === 'udp' ? 'udp' : rule.protocol === 'tcp' ? 'tcp' : null;
+    const hostPort = Number(rule.hostPort);
+    const guestPort = Number(rule.guestPort);
+    if (!protocol || !Number.isInteger(hostPort) || hostPort < 1024 || hostPort > 65535 ||
+        !Number.isInteger(guestPort) || guestPort < 1 || guestPort > 65535) {
+      throw new Error('Port forwards require TCP/UDP, host ports 1024–65535, and guest ports 1–65535.');
+    }
+    const key = `${protocol}:${hostPort}`;
+    if (used.has(key)) throw new Error(`Duplicate host port: ${protocol.toUpperCase()} ${hostPort}.`);
+    used.add(key);
+    return { id: String(rule.id || crypto.randomUUID()), protocol, hostPort, guestPort };
+  });
+}
+
+async function saveNetworkConfig(id: string, config: {
+  networkMode: NetworkMode;
+  networkAdapter: string;
+  portForwards: PortForwardRule[];
+}) {
+  if (config.networkMode !== 'nat' && config.networkMode !== 'bridged') {
+    throw new Error('Unsupported network mode.');
+  }
+  const adapter = String(config.networkAdapter ?? '').trim();
+  if (config.networkMode === 'bridged' && !adapter) {
+    throw new Error('Enter the host TAP adapter name before saving bridged networking.');
+  }
+  if (adapter.includes(',')) throw new Error('TAP adapter names cannot contain commas.');
+  const portForwards = validatePortForwards(config.portForwards ?? []);
+  const machines = await readMachines();
+  if (!machines.some((item) => item.id === id)) throw new Error('Machine not found.');
+  await writeMachines(machines.map((item) => item.id === id
+    ? { ...item, networkMode: config.networkMode, networkAdapter: adapter, portForwards }
+    : item));
+  log(`Saved ${config.networkMode.toUpperCase()} networking for ${machines.find((item) => item.id === id)?.name}.`);
+  return { ok: true };
+}
+
 async function getSystemInfo() {
   const [qemuX86, qemuImg, qemuI386, qemuExecutable] = await Promise.all([
     commandExists('qemu-system-x86_64'), commandExists('qemu-img'), commandExists('qemu-system-i386'), resolveCommand('qemu-system-x86_64')
@@ -240,7 +351,8 @@ async function getSystemInfo() {
   }
   const bundledRoot = path.resolve(bundledQemuRoot()) + path.sep;
   const qemuBundled = !!qemuExecutable && path.resolve(qemuExecutable).startsWith(bundledRoot);
-  return { platform: process.platform, hostArch: process.arch, qemuX86, qemuImg, qemuI386, qemuBundled, qemuVersion };
+  const network = await getHostNetworkInfo();
+  return { platform: process.platform, hostArch: process.arch, qemuX86, qemuImg, qemuI386, qemuBundled, qemuVersion, ...network };
 }
 
 function safeArchivePath(entryName: string): string | null {
@@ -568,7 +680,11 @@ async function importMachineSource(sourcePath: string): Promise<MachineRecord> {
       architecture: 'x86_64',
       memoryMiB: 1024,
       importedAt: new Date().toISOString(),
-      status: 'stopped'
+      status: 'stopped',
+      networkMode: 'nat',
+      networkAdapter: '',
+      portForwards: defaultPortForwards(),
+      macAddress: machineMac(id)
     };
     const all = await readMachines();
     all.unshift(machine);
@@ -584,6 +700,42 @@ async function importMachineSource(sourcePath: string): Promise<MachineRecord> {
 
 function qemuBinary(architecture: 'x86_64' | 'i386') {
   return architecture === 'i386' ? 'qemu-system-i386' : 'qemu-system-x86_64';
+}
+
+function buildNetworkArguments(machine: MachineRecord): string[] {
+  const mode = machine.networkMode ?? 'nat';
+  const mac = machine.macAddress || machineMac(machine.id);
+  if (mode === 'bridged') {
+    const adapter = (machine.networkAdapter ?? '').trim();
+    if (!adapter) throw new Error('Bridged networking requires a TAP adapter name. Open Machine configuration → Network mode to select one.');
+    if (process.platform === 'darwin') {
+      if (!existsSync(path.join('/dev', adapter))) {
+        throw new Error(`TAP device /dev/${adapter} was not found. Install/configure a macOS TAP driver and create the device first, or switch this machine to NAT.`);
+      }
+      return ['-netdev', `tap,id=labnet,ifname=${adapter},script=no,downscript=no`, '-device', `e1000,netdev=labnet,mac=${mac}`];
+    }
+    if (process.platform === 'win32') {
+      const knownInterfaces = Object.keys(os.networkInterfaces());
+      if (!knownInterfaces.includes(adapter)) {
+        throw new Error(`TAP adapter "${adapter}" is not visible to Windows. Install the ARM64 TAP-Windows driver and enter its exact adapter name.`);
+      }
+      return ['-netdev', `tap,id=labnet,ifname=${adapter}`, '-device', `e1000,netdev=labnet,mac=${mac}`];
+    }
+    throw new Error('Bridged TAP networking is not configured for this host platform.');
+  }
+
+  const rules = validatePortForwards(machine.portForwards ?? defaultPortForwards());
+  const forwardArgs = rules.map((rule) =>
+    `hostfwd=${rule.protocol}:0.0.0.0:${rule.hostPort}-:${rule.guestPort}`
+  );
+  const backend = [
+    'user',
+    'id=labnet',
+    `net=${NAT_SUBNET}`,
+    `dhcpstart=${NAT_GUEST_IP}`,
+    ...forwardArgs
+  ].join(',');
+  return ['-netdev', backend, '-device', `e1000,netdev=labnet,mac=${mac}`];
 }
 
 async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryMiB: number) {
@@ -606,8 +758,7 @@ async function startMachine(id: string, architecture: 'x86_64' | 'i386', memoryM
     '-name', machine.name,
     '-drive', `file=${qemuDiskPath},format=qcow2,if=ide,index=0`,
     '-boot', 'order=c,menu=on',
-    '-netdev', `dgram,id=labnet,local.type=inet,local.host=127.0.0.1,local.port=${UDP_LOCAL_PORT},remote.type=inet,remote.host=127.0.0.1,remote.port=${UDP_REMOTE_PORT}`,
-    '-device', 'e1000,netdev=labnet',
+    ...buildNetworkArguments(machine),
     '-display', process.platform === 'darwin' ? 'cocoa' : process.platform === 'win32' ? 'sdl' : 'gtk',
     '-monitor', 'none', '-serial', 'none', '-parallel', 'none'
   ];
@@ -707,12 +858,24 @@ async function createWindow() {
 
 app.whenReady().then(async () => {
   await migrateLegacyLabRoot().catch((error) => log(`Storage migration warning: ${String(error)}`));
-  ipcMain.handle('lab:get-state', async (): Promise<AppState> => ({
-    machines: await readMachines(),
-    activeMachineId,
-    labRoot: getLabRoot(),
-    system: await getSystemInfo()
-  }));
+  ipcMain.handle('lab:get-state', async (): Promise<AppState> => {
+    const machines = await readMachines();
+    const displayedMachines = await Promise.all(machines.map(async (machine) => {
+      let ipAddress: string | null = null;
+      if (machine.id === activeMachineId) {
+        ipAddress = (machine.networkMode ?? 'nat') === 'nat'
+          ? NAT_GUEST_IP
+          : await resolveGuestIpByMac(machine.macAddress || machineMac(machine.id));
+      }
+      return { ...machine, ipAddress };
+    }));
+    return {
+      machines: displayedMachines,
+      activeMachineId,
+      labRoot: getLabRoot(),
+      system: await getSystemInfo()
+    };
+  });
   ipcMain.handle('lab:select-archive', async () => {
     const result = await dialog.showOpenDialog({
       title: 'Import a vulnerable virtual machine',
@@ -724,6 +887,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('lab:import-archive', async (_event, filePath: string) => importMachineSource(filePath));
   ipcMain.handle('lab:start-machine', async (_event, options) => startMachine(options.id, options.architecture, options.memoryMiB));
   ipcMain.handle('lab:stop-machine', stopMachine);
+  ipcMain.handle('lab:save-network-config', async (_event, id, config) => saveNetworkConfig(id, config));
   ipcMain.handle('lab:open-network-setup-files', revealNetworkSetupFiles);
   ipcMain.handle('lab:remove-machine', async (_event, id: string) => removeMachine(id));
   ipcMain.handle('lab:open-lab-folder', async () => shell.openPath(getLabRoot()));
