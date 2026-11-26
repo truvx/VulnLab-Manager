@@ -176,7 +176,12 @@ export default function App() {
             <div className="memory-control"><input id="memory" type="range" min="256" max="4096" step="256" value={memoryMiB} onChange={(event) => setMemoryMiB(Number(event.target.value))}/><strong>{memoryMiB >= 1024 ? `${(memoryMiB / 1024).toFixed(memoryMiB % 1024 ? 2 : 0)} GB` : `${memoryMiB} MB`}</strong></div>
             <div className="network-config">
               <label className="field-label" htmlFor="network-mode">Network mode</label>
-              <select id="network-mode" value={networkMode} onChange={(event) => { setNetworkMode(event.target.value as NetworkMode); setNetworkDirty(true); }}>
+              <select id="network-mode" value={networkMode} onChange={(event) => {
+                const nextMode = event.target.value as NetworkMode;
+                setNetworkMode(nextMode);
+                if (nextMode === 'bridged' && !networkAdapter) setNetworkAdapter(system?.bridgeAdapters?.[0] ?? '');
+                setNetworkDirty(true);
+              }}>
                 <option value="nat">NAT · attacker-accessible port forwards</option>
                 <option value="bridged">Bridged · host TAP adapter</option>
               </select>
@@ -222,6 +227,7 @@ export default function App() {
                   {system?.platform === 'darwin' ? <>
                     <span>Choose a physical interface such as en0. socket_vmnet_client: {system?.vmnetSocketClientAvailable ? 'detected' : 'not installed'}.</span>
                     <span>Active bridged vmnet sockets: {system?.vmnetBridgedSockets?.length ? system.vmnetBridgedSockets.join(', ') : 'none detected'}.</span>
+                    <span>{networkAdapter && system?.vmnetBridgedSockets?.some((socket) => socket.endsWith(`socket_vmnet.bridged.${networkAdapter}`)) ? `Bridge for ${networkAdapter} is ready.` : `Bridge for ${networkAdapter || 'the selected interface'} is not ready yet.`}</span>
                     <span>Install with brew install socket_vmnet, then configure the socket_vmnet bridged LaunchDaemon for this interface. The app runs QEMU unprivileged through the helper; it does not install or launch root services.</span>
                   </> : <>
                     <span>Requires an ARM64-compatible TAP-Windows NDIS 6.30 driver (for example, the OpenVPN tap-windows6 driver). Enter the exact adapter name recognized by Windows.</span>
