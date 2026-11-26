@@ -39,6 +39,9 @@ Release assets include a `SHA256SUMS.txt` file. Compare the checksum before inst
 - **Disposable write overlays** — QEMU writes to a per-run QCOW2 overlay so the imported base image remains unchanged.
 - **Manual attacker workflow** — attacker VMs are intentionally outside the application's lifecycle control.
 - **Per-machine networking** — QEMU user-mode NAT with editable TCP/UDP host forwards, plus bridged Layer-2 networking (macOS socket_vmnet or Windows ARM64 TAP-Windows) when connected to the same isolated segment as the attacker VM.
+- **Guest IP visibility** — shows the expected NAT guest address and discovers bridged guest addresses from ARP/observed traffic when available.
+- **Network activity monitor** — per-target RX/TX packet and byte counts, last activity, and observed peer IPs without storing full packet payloads.
+- **Compact workspace** — import drop zone and Activity feed sit side by side.
 - **Generic Linux network helper** — included for manual use inside a selected Linux attacker VM; it is never automatically copied or executed.
 - **Cross-platform desktop packaging** — macOS Apple Silicon and Windows ARM64 installers.
 
