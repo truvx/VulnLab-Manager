@@ -83,6 +83,7 @@ jobs:
             mingw-w64-clang-aarch64-qemu-common
             mingw-w64-clang-aarch64-qemu-image-util
             mingw-w64-clang-aarch64-llvm-tools
+            mingw-w64-clang-aarch64-rav1e
       - name: Build Windows ARM64 installer with bundled QEMU
         env:
           MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
