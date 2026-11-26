@@ -870,7 +870,7 @@ function addTrafficPacket(packet: Buffer, originalLength: number, guestMac: stri
   trafficStats.captureAvailable = true;
 }
 
-async async function pollTrafficCaptureInternal() {
+async function pollTrafficCaptureInternal() {
   if (!activeCapturePath) return;
   let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
   try {
