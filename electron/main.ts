@@ -330,7 +330,7 @@ async function getHostNetworkInfo(): Promise<HostNetworkInfo> {
   if (process.platform === 'darwin') {
     // socket_vmnet bridges QEMU to the selected macOS physical interface without
     // requiring the QEMU process itself to run as root.
-    bridgeAdapters = networkInterfaceNames.filter((name) => /^en\\d+$/.test(name)).sort();
+    bridgeAdapters = networkInterfaceNames.filter((name) => name.startsWith('en') && name.length > 2 && [...name.slice(2)].every((digit) => digit >= '0' && digit <= '9')).sort();
   } else if (process.platform === 'win32') {
     tapDevices = await discoverWindowsTapAdapters();
     bridgeAdapters = tapDevices;
@@ -782,7 +782,7 @@ async function buildNetworkArguments(machine: MachineRecord): Promise<string[]> 
     const adapter = (machine.networkAdapter ?? '').trim();
     if (!adapter) throw new Error('Choose a host network adapter in Machine configuration before starting this bridged target.');
     if (process.platform === 'darwin') {
-      if (!/^en\\d+$/.test(adapter)) throw new Error('On macOS, choose a physical network interface such as en0 or en1.');
+      if (!adapter.startsWith('en') || adapter.length < 3 || ![...adapter.slice(2)].every((digit) => digit >= '0' && digit <= '9')) throw new Error('On macOS, choose a physical network interface such as en0 or en1.');
       // socket_vmnet_client passes an already-connected socket to QEMU on fd 3.
       // The launcher wrapper is selected in startMachine after the socket is validated.
       return ['-netdev', 'socket,id=labnet,fd=3', '-device', `e1000,netdev=labnet,mac=${mac}`];
