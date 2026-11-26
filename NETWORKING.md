@@ -2,7 +2,7 @@
 
 VulnLab Manager configures networking independently for each imported machine. The application starts and stops **only its selected QEMU target**. It does not start, stop, or reconfigure Kali, Parrot, VirtualBox, or another attacker VM.
 
-Choose **NAT** for the simplest cross-platform setup, or **Bridged (TAP)** when the host has a TAP adapter connected to the same isolated Layer-2 segment as the attacker VM.
+Choose **NAT** for the simplest cross-platform setup, or **Bridged** when you need full Layer-2 access (ARP discovery and unrestricted port scans) between the target and attacker VM. macOS uses socket_vmnet; Windows ARM64 uses a TAP-Windows adapter.
 
 ## NAT (recommended for most hosts)
 
@@ -37,29 +37,72 @@ NAT is not a transparent Layer-2 network. The attacker VM cannot ARP-scan the gu
 
 **Exposure warning:** forwarded ports bind to all host interfaces so the attacker VM can reach them. A host firewall may need to allow those host-side ports. Keep the target on a trusted, isolated environment, remove unused forwards, and do not expose deliberately vulnerable services to an untrusted LAN or the internet.
 
-## Bridged (TAP)
+## Bridged
 
-Bridged mode connects the QEMU E1000 NIC to a host TAP adapter using QEMU's tap backend. The target gets its address from the DHCP server on the Layer-2 network to which that TAP device is connected. This allows full network-level interaction (including ARP discovery and port scans) when the attacker VM is attached to the same segment.
+Bridged mode attaches the QEMU E1000 NIC to a host Layer-2 network. The vulnerable guest gets an address from DHCP on that network (or can use a static address in its subnet). When the attacker VM is attached to the same segment, it can ARP-discover the target and scan all guest services without per-port forwards.
 
-This mode requires a TAP device/driver and host-side Layer-2 connectivity. VulnLab Manager deliberately does not install kernel drivers, elevate privileges, create host bridges, or change host network interfaces automatically.
+This is the mode to use when you want the same network behavior as a conventional bridged VM. It requires platform-specific host networking setup; VulnLab Manager does not install kernel drivers, elevate privileges, create system bridges, or modify host networking automatically.
 
-### macOS Apple Silicon
+### macOS Apple Silicon — socket_vmnet
 
-- Install and configure a macOS TAP driver that provides a device such as /dev/tap0.
-- Enter the device name (for example, tap0) in the machine's Bridged network settings.
-- Connect that TAP interface to an isolated Layer-2 segment shared with the attacker VM before starting the target.
-- If using VirtualBox, configure the attacker adapter to the same isolated network segment.
+macOS uses the [socket_vmnet](https://github.com/lima-vm/socket_vmnet) helper. QEMU itself runs as your normal user; only the socket_vmnet daemon runs as root. The app detects `socket_vmnet_client` and the bridged socket for the selected host interface.
 
-The QEMU vmnet backend is not assumed by this application: Apple's com.apple.vm.networking entitlement is restricted and must be requested from Apple. This build uses a user-provided TAP device for bridged networking instead.
+1. Install the helper:
 
-### Windows 11 ARM64
+   ```bash
+   brew install socket_vmnet
+   ```
 
-- Install an ARM64-compatible TAP-Windows NDIS 6 driver. The OpenVPN tap-windows6 project includes ARM64 driver source/package support; the driver is not bundled with VulnLab Manager.
-- Find the adapter's exact Windows interface name (for example, with PowerShell Get-NetAdapter) and enter that name in the machine's Bridged network settings.
-- Connect the TAP adapter and your attacker VM to the same isolated Layer-2 segment using Windows networking/VirtualBox configuration.
-- Start the QEMU target and let the segment's DHCP server assign an address.
+2. Identify the host interface to bridge (usually `en0` for Wi-Fi or `enX` for another interface):
 
-Driver installation and creation of Windows Network Bridges require administrator approval and are intentionally left to the user.
+   ```bash
+   networksetup -listallhardwareports
+   ```
+
+3. Create and start a bridged LaunchDaemon. For `en0`, run this in Terminal:
+
+   ```bash
+   PREFIX="$(brew --prefix)"
+   SOCKET_PREFIX="$(brew --prefix socket_vmnet)"
+   BRIDGED="en0"
+   PLIST_SRC="$(find "$SOCKET_PREFIX" -name "io.github.lima-vm.socket_vmnet.bridged.en0.plist" -print -quit)"
+   test -n "$PLIST_SRC" || { echo "socket_vmnet bridged LaunchDaemon template not found"; exit 1; }
+   PLIST="/Library/LaunchDaemons/io.github.lima-vm.socket_vmnet.bridged.$BRIDGED.plist"
+   sed -e "s@/opt@$PREFIX/opt@g" -e "s@/var@$PREFIX/var@g" -e "s@en0@$BRIDGED@g" "$PLIST_SRC" | sudo tee "$PLIST" >/dev/null
+   sudo chown root:wheel "$PLIST"
+   sudo chmod 644 "$PLIST"
+   sudo launchctl bootstrap system "$PLIST"
+   sudo launchctl enable "system/io.github.lima-vm.socket_vmnet.bridged.$BRIDGED"
+   sudo launchctl kickstart -kp "system/io.github.lima-vm.socket_vmnet.bridged.$BRIDGED"
+   ```
+
+   This installs a root-owned system LaunchDaemon for the chosen interface. It creates the socket at `$(brew --prefix)/var/run/socket_vmnet.bridged.en0`. Only do this for software and configuration you trust; socket_vmnet needs root to call Apple's vmnet framework. The daemon is separate from VulnLab Manager and is not started or stopped by the app.
+
+4. In VulnLab Manager, select **Bridged**, choose the same interface name (for example `en0`), save, then start the target. The app launches QEMU through `socket_vmnet_client` and does not run QEMU as root.
+5. In VirtualBox, power off Kali/Parrot and configure the attacker VM's second adapter as **Bridged Adapter**, selecting the same physical interface (for example `en0`). Keep the first adapter as your regular internet connection if needed. Start the attacker VM and let its lab adapter obtain DHCP on the same LAN/subnet as the QEMU target.
+6. Check the target's displayed IP or run an ARP scan from the attacker's bridged adapter.
+
+**Important:** Bridging onto Wi-Fi may be restricted by some access points, enterprise networks, or VirtualBox/macOS driver behavior. A wired Ethernet interface and a dedicated isolated switch/VLAN are more reliable. Never bridge an intentionally vulnerable target to a public or trusted home/work LAN.
+
+To remove the LaunchDaemon later:
+
+```bash
+BRIDGED="en0"
+sudo launchctl bootout system "/Library/LaunchDaemons/io.github.lima-vm.socket_vmnet.bridged.$BRIDGED.plist"
+sudo rm "/Library/LaunchDaemons/io.github.lima-vm.socket_vmnet.bridged.$BRIDGED.plist"
+```
+
+### Windows 11 ARM64 — TAP-Windows
+
+QEMU's Windows TAP backend needs a separate TAP network driver; it is not included in the VulnLab Manager installer.
+
+1. Install a signed ARM64-compatible NDIS 6.30 TAP-Windows driver. The upstream [OpenVPN tap-windows6 project](https://github.com/OpenVPN/tap-windows6) documents the ARM64 driver build/installation requirements. NDIS 6.20 is not sufficient on ARM64 desktop systems; use an NDIS 6.30 driver.
+2. In an Administrator PowerShell, inspect adapters with `Get-NetAdapter`.
+3. In VulnLab Manager select **Bridged** and enter the exact TAP adapter interface name shown by Windows.
+4. Connect the TAP adapter and the attacker VM to the same isolated Layer-2 network using Windows networking/VirtualBox settings. This host-side bridge setup requires administrator approval and is intentionally not performed by VulnLab Manager.
+5. Start the target and confirm that a DHCP server on the shared segment assigns an IP address.
+
+If Windows does not expose a compatible TAP adapter, use NAT mode. Do not install unsigned test drivers or disable Secure Boot just to make a lab network work.
 
 ### Security
 
@@ -80,7 +123,7 @@ The optional lab-network-setup.sh remains available for manually configuring a L
 - **NAT guest has no address:** confirm the guest is set to obtain IPv4 by DHCP and restart it.
 - **Kali cannot reach a forwarded port:** use one of the host IPv4 addresses shown in the app; verify that the host OS firewall permits the host-side port; verify that the selected host port is forwarded to the service's actual guest port.
 - **Port-forward collision:** choose a different host port in Machine configuration. Guest service ports do not need to change.
-- **Bridged target has no IP:** verify the TAP driver/device is installed, the TAP adapter is connected to the same isolated Layer-2 network as the attacker, and DHCP is available on that segment.
-- **Bridged mode fails at launch:** confirm the TAP adapter name exactly matches the host device name and that the current user has permission to open it.
+- **Bridged target has no IP:** on macOS, verify the socket_vmnet LaunchDaemon is running for the selected enX interface and its bridged socket exists; on Windows, verify the ARM64 TAP-Windows adapter is installed. In both cases verify the attacker VM shares the same Layer-2 segment and DHCP is available.
+- **Bridged mode fails at launch:** on macOS, confirm socket_vmnet_client is installed and the bridged LaunchDaemon socket path exists for the selected enX interface; on Windows, confirm the selected TAP adapter name matches the installed adapter.
 
 QEMU network backend references: https://www.qemu.org/docs/master/system/devices/net.html and https://www.qemu.org/docs/master/system/qemu-manpage.html#network-options.
